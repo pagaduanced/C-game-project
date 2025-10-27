@@ -1,0 +1,93 @@
+#include "raylib.h"
+#include <stdio.h>
+
+#define CELL_SIZE 40
+#define ROWS 10
+#define COLS 10
+
+// 0 = path, 1 = wall
+int maze[ROWS][COLS] = {
+    {0,1,1,1,1,1,1,1,1,1},
+    {0,0,0,0,1,0,0,0,0,1},
+    {1,0,1,0,1,0,1,1,0,1},
+    {1,0,1,0,0,0,0,1,0,1},
+    {1,0,1,1,1,1,0,1,0,1},
+    {1,0,0,0,0,0,0,1,0,1},
+    {1,1,1,1,1,1,0,1,0,1},
+    {1,0,0,0,0,1,0,0,0,1},
+    {1,0,1,1,0,0,0,1,0,1},
+    {1,1,1,1,1,1,0,1,0,0}  // goal at bottom-right (9,9)
+};
+
+int playerRow = 0;
+int playerCol = 0;
+int goalRow = 9;
+int goalCol = 9;
+int won = 0;
+
+void ResetGame(void) {
+    playerRow = 0;
+    playerCol = 0;
+    won = 0;
+}
+
+int main(void) {
+    InitWindow(COLS * CELL_SIZE, ROWS * CELL_SIZE, "Simple Maze (raylib + stdio)");
+    SetTargetFPS(60);
+
+    while (!WindowShouldClose()) {
+        // Movement (one cell per key press)
+        if (!won) {
+            if ((IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) && playerRow > 0 && maze[playerRow - 1][playerCol] == 0)
+                playerRow--;
+            if ((IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) && playerRow < ROWS - 1 && maze[playerRow + 1][playerCol] == 0)
+                playerRow++;
+            if ((IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) && playerCol > 0 && maze[playerRow][playerCol - 1] == 0)
+                playerCol--;
+            if ((IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) && playerCol < COLS - 1 && maze[playerRow][playerCol + 1] == 0)
+                playerCol++;
+
+            if (playerRow == goalRow && playerCol == goalCol)
+                won = 1;
+        }
+
+        if (IsKeyPressed(KEY_R)) ResetGame();
+
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+
+        // Draw maze grid
+        for (int r = 0; r < ROWS; r++) {
+            for (int c = 0; c < COLS; c++) {
+                int x = c * CELL_SIZE;
+                int y = r * CELL_SIZE;
+                if (maze[r][c] == 1)
+                    DrawRectangle(x, y, CELL_SIZE, CELL_SIZE, DARKGRAY);
+                else
+                    DrawRectangleLines(x, y, CELL_SIZE, CELL_SIZE, LIGHTGRAY);
+            }
+        }
+
+        // Draw goal
+        DrawRectangle(goalCol * CELL_SIZE + 8, goalRow * CELL_SIZE + 8,
+                      CELL_SIZE - 16, CELL_SIZE - 16, GREEN);
+
+        // Draw player
+        DrawCircle(playerCol * CELL_SIZE + CELL_SIZE/2,
+                   playerRow * CELL_SIZE + CELL_SIZE/2,
+                   CELL_SIZE/3, SKYBLUE);
+
+        // If won
+        if (won) {
+            DrawRectangle(0, GetScreenHeight()/2 - 30, GetScreenWidth(), 60, Fade(BLACK, 0.5f));
+            DrawText("You reached the goal! Press R to restart.",
+                     GetScreenWidth()/2 - MeasureText("You reached the goal! Press R to restart.", 20)/2,
+                     GetScreenHeight()/2 - 10, 20, YELLOW);
+        }
+
+        EndDrawing();
+    }
+
+    CloseWindow();
+    return 0;
+}
