@@ -1,93 +1,130 @@
 #include "raylib.h"
-#include <stdio.h>
 
-#define CELL_SIZE 40
-#define ROWS 10
-#define COLS 10
+typedef enum GameState
+{
+    STATE_MENU,
+    STATE_GAME
+} GameState;
+int main(void)
+{
+    // Initialization
+    //--------------------------------------------------------------------------------------
+    const int screenWidth = 1600;
+    const int screenHeight = 900;
 
-// 0 = path, 1 = wall
-int maze[ROWS][COLS] = {
-    {0,1,1,1,1,1,1,1,1,1},
-    {0,0,0,0,1,0,0,0,0,1},
-    {1,0,1,0,1,0,1,1,0,1},
-    {1,0,1,0,0,0,0,1,0,1},
-    {1,0,1,1,1,1,0,1,0,1},
-    {1,0,0,0,0,0,0,1,0,1},
-    {1,1,1,1,1,1,0,1,0,1},
-    {1,0,0,0,0,1,0,0,0,1},
-    {1,0,1,1,0,0,0,1,0,1},
-    {1,1,1,1,1,1,0,1,0,0}  // goal at bottom-right (9,9)
-};
+    InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
 
-int playerRow = 0;
-int playerCol = 0;
-int goalRow = 9;
-int goalCol = 9;
-int won = 0;
+    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
 
-void ResetGame(void) {
-    playerRow = 0;
-    playerCol = 0;
-    won = 0;
-}
+    //--------------------------------------------------------------------------------------
+    GameState state = STATE_MENU;
+    int menuIndex = 0; // 0 = "Start", 1 = "Quit"
+    int selectedplayers = 0;
+    bool playerConfirmed = false;
+    bool gameStarted = false;
+    const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
+    int positions[3] = {400, 700, 1000};
 
-int main(void) {
-    InitWindow(COLS * CELL_SIZE, ROWS * CELL_SIZE, "Simple Maze (raylib + stdio)");
-    SetTargetFPS(60);
+    // Main game loop
+    while (!WindowShouldClose()) // Detect window close button or ESC key
+    {
+        if (state == STATE_MENU)
+        {
+            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
+                menuIndex = 1;
+            if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
+                menuIndex = 0;
 
-    while (!WindowShouldClose()) {
-        // Movement (one cell per key press)
-        if (!won) {
-            if ((IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) && playerRow > 0 && maze[playerRow - 1][playerCol] == 0)
-                playerRow--;
-            if ((IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) && playerRow < ROWS - 1 && maze[playerRow + 1][playerCol] == 0)
-                playerRow++;
-            if ((IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) && playerCol > 0 && maze[playerRow][playerCol - 1] == 0)
-                playerCol--;
-            if ((IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) && playerCol < COLS - 1 && maze[playerRow][playerCol + 1] == 0)
-                playerCol++;
-
-            if (playerRow == goalRow && playerCol == goalCol)
-                won = 1;
-        }
-
-        if (IsKeyPressed(KEY_R)) ResetGame();
-
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        // Draw maze grid
-        for (int r = 0; r < ROWS; r++) {
-            for (int c = 0; c < COLS; c++) {
-                int x = c * CELL_SIZE;
-                int y = r * CELL_SIZE;
-                if (maze[r][c] == 1)
-                    DrawRectangle(x, y, CELL_SIZE, CELL_SIZE, DARKGRAY);
-                else
-                    DrawRectangleLines(x, y, CELL_SIZE, CELL_SIZE, LIGHTGRAY);
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                if (menuIndex == 0)
+                    state = STATE_GAME;
+            }
+            else if (menuIndex == 1)
+            {
+                if (IsKeyPressed(KEY_ENTER))
+                {
+                    break; // this exits the program
+                }
             }
         }
+        else if (state == STATE_GAME)
+        {
+            if (IsKeyPressed(KEY_ESCAPE))
+            {
+                state = STATE_MENU;
+            }
+                if (!playerConfirmed)
+    {
+        if (IsKeyPressed(KEY_RIGHT)) selectedplayers = (selectedplayers + 1) % 3;
+        if (IsKeyPressed(KEY_LEFT)) selectedplayers = (selectedplayers - 1 + 3) % 3;
 
-        // Draw goal
-        DrawRectangle(goalCol * CELL_SIZE + 8, goalRow * CELL_SIZE + 8,
-                      CELL_SIZE - 16, CELL_SIZE - 16, GREEN);
-
-        // Draw player
-        DrawCircle(playerCol * CELL_SIZE + CELL_SIZE/2,
-                   playerRow * CELL_SIZE + CELL_SIZE/2,
-                   CELL_SIZE/3, SKYBLUE);
-
-        // If won
-        if (won) {
-            DrawRectangle(0, GetScreenHeight()/2 - 30, GetScreenWidth(), 60, Fade(BLACK, 0.5f));
-            DrawText("You reached the goal! Press R to restart.",
-                     GetScreenWidth()/2 - MeasureText("You reached the goal! Press R to restart.", 20)/2,
-                     GetScreenHeight()/2 - 10, 20, YELLOW);
-        }
-
-        EndDrawing();
+        if (IsKeyPressed(KEY_ENTER)) playerConfirmed = true;
     }
+    else if (playerConfirmed && !gameStarted)
+    {
+        // Press Enter again to start the (currently blank) game
+        if (IsKeyPressed(KEY_ENTER))
+        {
+            gameStarted = true;
+        }
+    }
+}
 
-    CloseWindow();
+
+
+        //-----------------------DRAWING AREA OF FUNCTIONS(BACKBONE)---------------------//
+        BeginDrawing();
+
+        ClearBackground(RAYWHITE);
+
+        if (state == STATE_MENU)
+        {
+
+            DrawText("OUT OF TOUCH", 600, 150, 50, BLACK);
+
+            Color startcolor = (menuIndex == 0) ? RED : DARKGRAY;
+            Color quitcolor = (menuIndex == 0) ? DARKGRAY : RED;
+
+            DrawText("START GAME", 650, 300, 40, startcolor);
+            DrawText("QUIT GAME", 670, 360, 40, quitcolor);
+
+            DrawText("USE ARROWS UP AND DOWN TO CHOOSE AND PRESS ENTER TO SELECT", 420, 450, 20, GRAY);
+        }
+        else if (state == STATE_GAME)
+        {
+            // when game starts, clear everything (blank screen)
+        if (gameStarted)
+        {
+         ClearBackground(RAYWHITE);
+         // DITO NA MAG START YUNG MISMONG LARO
+         EndDrawing();
+         continue;
+        }
+            // --- DRAW GAME SCREEN ---//
+            DrawText("GAME RUNNING!", 610, 200, 40, DARKBLUE);
+            DrawText("Press ESC to return to menu", 620, 260, 20, GRAY);
+            for (int i = 0; i < 3; i++)
+                {
+                    Color color = (i == selectedplayers) ? RED : DARKBLUE;
+                    DrawRectangleLines(positions[i], 300, 150, 150, color);
+                    DrawText(names[i], positions[i] + -1, 450, 40, color);
+                }
+
+            if (playerConfirmed && !gameStarted)
+                {
+                    DrawText(TextFormat("You chose: %s", names[selectedplayers]), 620, 600, 30, BLACK);
+                    DrawText("Press ENTER again to start", 620, 640, 20, GRAY);
+                }
+            }
+                EndDrawing();
+        //----------------------------------------------------------------------------------
+}
+
+    // De-Initialization
+    //--------------------------------------------------------------------------------------
+    CloseWindow(); // Close window and OpenGL context
+    //--------------------------------------------------------------------------------------
+
     return 0;
 }
