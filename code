@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include <stdio.h>
 
 typedef enum GameState
 {
@@ -24,6 +25,10 @@ int main(void)
     bool gameStarted = false;
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
     int positions[3] = {400, 700, 1000};
+    Texture2D PlayerImages[3];
+    PlayerImages [0] = LoadTexture("D:/Downloads/ced.png");
+    PlayerImages [1] = LoadTexture("D:/Downloads/amiel.png");
+    PlayerImages [2] = LoadTexture("D:/Downloads/ian.png");
 
     // Main game loop
     while (!WindowShouldClose()) // Detect window close button or ESC key
@@ -102,13 +107,17 @@ int main(void)
          continue;
         }
             // --- DRAW GAME SCREEN ---//
-            DrawText("GAME RUNNING!", 610, 200, 40, DARKBLUE);
-            DrawText("Press ESC to return to menu", 620, 260, 20, GRAY);
+            DrawText("GAME RUNNING!", 610, 100, 40, DARKBLUE);
+            DrawText("Press ESC to return to menu", 620, 160, 20, GRAY);
+
             for (int i = 0; i < 3; i++)
                 {
                     Color color = (i == selectedplayers) ? RED : DARKBLUE;
+                    float scale = 150.0f / PlayerImages[i].width * 0.8f;
+                    DrawTextureEx(PlayerImages[i], (Vector2){positions[i] + 10, 290}, 0.0f, scale, WHITE);
                     DrawRectangleLines(positions[i], 300, 150, 150, color);
-                    DrawText(names[i], positions[i] + -1, 450, 40, color);
+                    int textWidth = MeasureText(names[i], 40);
+                    DrawText(names[i], positions[i] + 75 - textWidth / 2, 460, 40, color);
                 }
 
             if (playerConfirmed && !gameStarted)
@@ -123,6 +132,7 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
+    for (int i = 0; i < 3; i++) UnloadTexture(PlayerImages[i]);
     CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
