@@ -9,13 +9,32 @@ typedef enum GameState
     STATE_COUNTDOWN
 } GameState;
 
+// add this field to your Character struct:
 typedef struct
 {
     Texture2D tex;
     Vector2 pos;
     float speed;
     float scale;
+    float rotationDeg; // NEW: current rotation in degrees
 } Character;
+
+// add this NEW type below Character
+typedef struct
+{
+    Vector2 pos;
+    Vector2 vel;
+    float rotationDeg;
+    float life; // seconds remaining
+    bool active;
+} Bullet;
+
+// tweak as you like
+#define MAX_BULLETS 128
+#define BULLET_SPEED 700.0f
+#define BULLET_LIFE 1.5f
+#define BULLET_W 12.0f
+#define BULLET_H 4.0f
 
 int main(void)
 {
@@ -54,6 +73,7 @@ int main(void)
 
     Character player;
     bool playerInitialized = false;
+    Bullet bullets[MAX_BULLETS] = {0};
 
     // Main game loop
     while (!WindowShouldClose()) // Detect window close button or ESC key
@@ -162,12 +182,13 @@ int main(void)
                 }
             }
 
-            // --- Live gameplay movement (only when game started and player is ready) ---
+            // --- Live gameplay (only when game started and player is ready) ---
             if (gameStarted && playerInitialized)
             {
                 float dt = GetFrameTime();
-                Vector2 move = {0};
 
+                // movement input
+                Vector2 move = (Vector2){0, 0};
                 if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
                     move.x -= 1.0f;
                 if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))
@@ -177,7 +198,6 @@ int main(void)
                 if (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN))
                     move.y += 1.0f;
 
-                // normalize diagonal so diagonals aren’t faster
                 if (move.x != 0 || move.y != 0)
                 {
                     float len = sqrtf(move.x * move.x + move.y * move.y);
@@ -188,9 +208,11 @@ int main(void)
                 player.pos.x += move.x * player.speed * dt;
                 player.pos.y += move.y * player.speed * dt;
 
-                // clamp inside the window
+                // size once; reuse
                 float pw = player.tex.width * player.scale;
                 float ph = player.tex.height * player.scale;
+
+                // clamp inside window
                 if (player.pos.x < 0)
                     player.pos.x = 0;
                 if (player.pos.y < 0)
@@ -199,8 +221,60 @@ int main(void)
                     player.pos.x = screenWidth - pw;
                 if (player.pos.y > screenHeight - ph)
                     player.pos.y = screenHeight - ph;
+
+                // --- AIM: rotate player to face mouse ---
+                Vector2 mouse = GetMousePosition();
+                Vector2 center = (Vector2){player.pos.x + pw * 0.5f, player.pos.y + ph * 0.5f};
+                Vector2 dir = (Vector2){mouse.x - center.x, mouse.y - center.y};
+                float dlen = sqrtf(dir.x * dir.x + dir.y * dir.y);
+                if (dlen > 0.0001f)
+                {
+                    dir.x /= dlen;
+                    dir.y /= dlen;
+                }
+
+                // adjust +90 if your sprite's "up" should aim at cursor
+                player.rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI) - 90.0f;
+
+                // --- SHOOT: spawn bullet on left click ---
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+                {
+                    for (int i = 0; i < MAX_BULLETS; i++)
+                    {
+                        if (!bullets[i].active)
+                        {
+                            float muzzleDist = fmaxf(pw, ph) * 0.5f; // push out of sprite
+                            Vector2 spawn = (Vector2){center.x + dir.x * muzzleDist, center.y + dir.y * muzzleDist};
+
+                            bullets[i].pos = spawn;
+                            bullets[i].vel = (Vector2){dir.x * BULLET_SPEED, dir.y * BULLET_SPEED};
+                            bullets[i].rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI);
+                            bullets[i].life = BULLET_LIFE;
+                            bullets[i].active = true;
+                            break;
+                        }
+                    }
+                }
+
+                // --- UPDATE bullets ---
+                for (int i = 0; i < MAX_BULLETS; i++)
+                {
+                    if (!bullets[i].active)
+                        continue;
+                    bullets[i].pos.x += bullets[i].vel.x * dt;
+                    bullets[i].pos.y += bullets[i].vel.y * dt;
+                    bullets[i].life -= dt;
+
+                    if (bullets[i].life <= 0.0f ||
+                        bullets[i].pos.x < -50 || bullets[i].pos.x > screenWidth + 50 ||
+                        bullets[i].pos.y < -50 || bullets[i].pos.y > screenHeight + 50)
+                    {
+                        bullets[i].active = false;
+                    }
+                }
             }
         }
+
         else if (state == STATE_COUNTDOWN)
         {
             double elapsed = GetTime() - countdownStartTime;
@@ -221,8 +295,9 @@ int main(void)
 
                 // --- Initialize the chosen player once when countdown ends ---
                 player.tex = PlayerIngameImage[selectedplayers]; // use the confirmed character
-                player.scale = 150.0f / player.tex.width;   // keeps width around ~150px (tweak if you like)
-                player.speed = 350.0f;                      // move speed in pixels per second
+                player.rotationDeg = 0.0f;
+                player.scale = 150.0f / player.tex.width; // keeps width around ~150px (tweak if you like)
+                player.speed = 350.0f;                    // move speed in pixels per second
 
                 // center-ish starting position (horizontally centered, a bit lower than mid)
                 player.pos.x = (screenWidth - player.tex.width * player.scale) * 0.5f;
@@ -294,14 +369,32 @@ int main(void)
                 if (playerInitialized)
                 {
                     // draw the selected character
-                    DrawTextureEx(player.tex, player.pos, 0.0f, player.scale, WHITE);
+                    Rectangle src = (Rectangle){0, 0, player.tex.width, player.tex.height};
+                    Rectangle dst = (Rectangle){
+                        player.pos.x + (player.tex.width * player.scale) * 0.5f,  // position at center (x)
+                        player.pos.y + (player.tex.height * player.scale) * 0.5f, // position at center (y)
+                        player.tex.width * player.scale,
+                        player.tex.height * player.scale};
+                    Vector2 origin = (Vector2){dst.width * 0.5f, dst.height * 0.5f};
 
-                    // (optional) small HUD showing who you picked
-                    DrawText(TextFormat("Player: %s", names[selectedplayers]), 20, 20, 24, DARKBLUE);
+                    DrawTexturePro(player.tex, src, dst, origin, player.rotationDeg, WHITE);
                 }
                 else
                 {
                     DrawText("Loading player...", 630, 400, 30, RED);
+                }
+                
+                // --- draw bullets ---
+                for (int i = 0; i < MAX_BULLETS; i++)
+                {
+                    if (!bullets[i].active)
+                        continue;
+
+                    Rectangle bdst = (Rectangle){bullets[i].pos.x, bullets[i].pos.y, BULLET_W, BULLET_H};
+                    Vector2 borg = (Vector2){BULLET_W * 0.5f, BULLET_H * 0.5f};
+
+                    // small yellow rounded rectangle vibe — solid yellow
+                    DrawRectanglePro(bdst, borg, bullets[i].rotationDeg, BLUE);
                 }
 
                 EndDrawing();
