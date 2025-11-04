@@ -29,6 +29,11 @@ typedef struct
     bool active;
 } Bullet;
 
+// --- Ammo system ---
+int maxBullets = 12,currentBullets = 12;
+bool reloading = false;
+float reloadTime = 2.0f, reloadTime2 = 0.0f;;
+
 // tweak as you like
 #define MAX_BULLETS 128
 #define BULLET_SPEED 700.0f
@@ -62,14 +67,14 @@ int main(void)
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
     int positions[3] = {400, 700, 1000};
     Texture2D PlayerImages[3];
-    PlayerImages[0] = LoadTexture("C:/VSCODE-RAYLIB/images/ced.png");
-    PlayerImages[1] = LoadTexture("C:/VSCODE-RAYLIB/images/amiel.png");
-    PlayerImages[2] = LoadTexture("C:/VSCODE-RAYLIB/images/ian.png");
+    PlayerImages[0] = LoadTexture("C:/Users/henry/Downloads/ced.png");
+    PlayerImages[1] = LoadTexture("C:/Users/henry/Downloads/amiel.png");
+    PlayerImages[2] = LoadTexture("C:/Users/henry/Downloads/ian.png");
 
     Texture2D PlayerIngameImage[3];
-    PlayerIngameImage[0] = LoadTexture("C:/VSCODE-RAYLIB/images/ced_top.png");
-    PlayerIngameImage[1] = LoadTexture("C:/VSCODE-RAYLIB/images/amiel_top.png");
-    PlayerIngameImage[2] = LoadTexture("C:/VSCODE-RAYLIB/images/ian_top.png");
+    PlayerIngameImage[0] = LoadTexture("C:/Users/henry/Downloads/ced_top.png");
+    PlayerIngameImage[1] = LoadTexture("C:/Users/henry/Downloads/amiel_top.png");
+    PlayerIngameImage[2] = LoadTexture("C:/Users/henry/Downloads/ian_top.png");
 
     Character player;
     bool playerInitialized = false;
@@ -130,6 +135,8 @@ int main(void)
                     countdownActive = false;
                     countdown = 3.0f;
                     playerInitialized = false;
+                    currentBullets = maxBullets;
+                    reloading = false;
                 }
                 else if (menuIndex == 1)
                 {
@@ -146,6 +153,8 @@ int main(void)
                 countdownActive = false;
                 countdown = 3.0f;
                 playerInitialized = false;
+                currentBullets = maxBullets;
+                reloading = false;
             }
             if (hoverQuit && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
@@ -162,6 +171,8 @@ int main(void)
                 countdownActive = false;
                 countdown = 3.0f;
                 playerInitialized = false;
+                currentBullets = maxBullets;
+                reloading = false;
             }
 
             if (!playerConfirmed)
@@ -238,18 +249,17 @@ int main(void)
                     dir.y /= dlen;
                 }
 
-                // adjust +90 if your sprite's "up" should aim at cursor
                 player.rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI) - 90.0f;
 
-                // --- SHOOT: spawn bullet on left click ---
-                // --- SHOOT: spawn bullet on left click/hold with delay ---
-                if ((IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonDown(MOUSE_LEFT_BUTTON)) && fireCooldown <= 0.0f)
+                // --- SHOOT bullets ---
+                if ((IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonDown(MOUSE_LEFT_BUTTON)) &&
+                    fireCooldown <= 0.0f && !reloading && currentBullets > 0)
                 {
                     for (int i = 0; i < MAX_BULLETS; i++)
                     {
                         if (!bullets[i].active)
                         {
-                            float muzzleDist = fmaxf(pw, ph) * 0.5f; // push out of sprite
+                            float muzzleDist = fmaxf(pw, ph) * 0.5f;
                             Vector2 spawn = (Vector2){center.x + dir.x * muzzleDist, center.y + dir.y * muzzleDist};
 
                             bullets[i].pos = spawn;
@@ -258,7 +268,8 @@ int main(void)
                             bullets[i].life = BULLET_LIFE;
                             bullets[i].active = true;
 
-                            fireCooldown = FIRE_DELAY; // reset the timer so next shot waits
+                            fireCooldown = FIRE_DELAY;
+                            currentBullets--; // consume one bullet
                             break;
                         }
                     }
@@ -280,6 +291,25 @@ int main(void)
                         bullets[i].active = false;
                     }
                 }
+
+                // Reload bullets ---
+                if (reloading)
+                {
+                    reloadTime2 -= dt;
+                    if (reloadTime2 <= 0.0f)
+                    {
+                        currentBullets = maxBullets;
+                        reloading = false;
+                    }
+                }
+                else
+                {
+                    if (IsKeyPressed(KEY_R) && currentBullets < maxBullets)
+                    {
+                        reloading = true;
+                        reloadTime2 = reloadTime;
+                    }
+                }
             }
         }
 
@@ -299,19 +329,17 @@ int main(void)
             {
                 countdownActive = false;
                 gameStarted = true;
-                state = STATE_GAME; // proceed to actual game after countdown
+                state = STATE_GAME;
 
-                // --- Initialize the chosen player once when countdown ends ---
-                player.tex = PlayerIngameImage[selectedplayers]; // use the confirmed character
+                player.tex = PlayerIngameImage[selectedplayers];
                 player.rotationDeg = 0.0f;
-                player.scale = 150.0f / player.tex.width; // keeps width around ~150px (tweak if you like)
-                player.speed = 350.0f;                    // move speed in pixels per second
-
-                // center-ish starting position (horizontally centered, a bit lower than mid)
+                player.scale = 150.0f / player.tex.width;
+                player.speed = 350.0f;
                 player.pos.x = (screenWidth - player.tex.width * player.scale) * 0.5f;
                 player.pos.y = (screenHeight - player.tex.height * player.scale) * 0.6f;
-
-                playerInitialized = true; // mark as ready to draw & move
+                playerInitialized = true;
+                currentBullets = maxBullets;
+                reloading = false;
             }
         }
 
@@ -326,23 +354,19 @@ int main(void)
             int rw = GetRenderWidth();
             int rh = GetRenderHeight();
 
-            // Title (centered, from first code)
             int titleSize = 100;
             int titleWidth = MeasureText("OUT OF TOUCH", titleSize);
             int titleX = (rw - titleWidth) / 2;
             DrawText("OUT OF TOUCH", titleX, rh / 4, titleSize, BLACK);
 
-            // Buttons (centered) + hover highlight (from first code)
             int fontSize = 40;
             const int padX = 24, padY = 10;
 
-            // START
             int startWidth = MeasureText("START GAME", fontSize);
             int StartX = (rw - startWidth) / 2;
             int StartY = rh / 2;
             Rectangle btnStart = (Rectangle){StartX - padX, StartY - padY, startWidth + 2 * padX, fontSize + 2 * padY};
 
-            // QUIT
             int quitWidth = MeasureText("QUIT GAME", fontSize);
             int quitX = (rw - quitWidth) / 2;
             int quitY = StartY + 60;
@@ -360,9 +384,8 @@ int main(void)
             DrawText("START GAME", StartX, StartY, fontSize, startcolor);
             DrawText("QUIT GAME", quitX, quitY, fontSize, quitcolor);
 
-            // Instructions (centered)
             int insfontSize = 20;
-            const char *tip = "USE ARROWS UP/DOWN OR MOUSE • PRESS ENTER/CLICK TO SELECT";
+            const char *tip = "USE ARROWS UP/DOWN OR MOUSE // PRESS ENTER/CLICK TO SELECT";
             int instructionsWidth = MeasureText(tip, insfontSize);
             int insX = (rw - instructionsWidth) / 2;
             int insY = quitY + 60;
@@ -376,16 +399,27 @@ int main(void)
 
                 if (playerInitialized)
                 {
-                    // draw the selected character
                     Rectangle src = (Rectangle){0, 0, player.tex.width, player.tex.height};
                     Rectangle dst = (Rectangle){
-                        player.pos.x + (player.tex.width * player.scale) * 0.5f,  // position at center (x)
-                        player.pos.y + (player.tex.height * player.scale) * 0.5f, // position at center (y)
+                        player.pos.x + (player.tex.width * player.scale) * 0.5f,
+                        player.pos.y + (player.tex.height * player.scale) * 0.5f,
                         player.tex.width * player.scale,
                         player.tex.height * player.scale};
                     Vector2 origin = (Vector2){dst.width * 0.5f, dst.height * 0.5f};
 
                     DrawTexturePro(player.tex, src, dst, origin, player.rotationDeg, WHITE);
+
+                    // --- Display ammo info ---
+                    if (reloading)
+                    {
+                        DrawText("Reloading...", 50, 50, 30, RED);
+                    }
+                    else
+                    {
+                        DrawText(TextFormat("Bullets: %d / %d", currentBullets, maxBullets), 50, 50, 30, DARKBLUE);
+                        if (currentBullets == 0)
+                            DrawText("Out of bullets! Press R to reload!", 50, 90, 20, GRAY);
+                    }
                 }
                 else
                 {
@@ -400,8 +434,6 @@ int main(void)
 
                     Rectangle bdst = (Rectangle){bullets[i].pos.x, bullets[i].pos.y, BULLET_W, BULLET_H};
                     Vector2 borg = (Vector2){BULLET_W * 0.5f, BULLET_H * 0.5f};
-
-                    // small yellow rounded rectangle vibe — solid yellow
                     DrawRectanglePro(bdst, borg, bullets[i].rotationDeg, BLUE);
                 }
 
@@ -430,7 +462,6 @@ int main(void)
         }
         else if (state == STATE_COUNTDOWN)
         {
-            // Separate countdown screen
             ClearBackground(WHITE);
 
             char countdownText[10];
@@ -439,22 +470,17 @@ int main(void)
             else
                 sprintf(countdownText, "START!");
 
-            int fontSize = (countdown > 0) ? 200 : 100;
-            Color color = (countdown > 0) ? RED : GREEN;
+            int fontSize = 150;
             int textWidth = MeasureText(countdownText, fontSize);
-            DrawText(countdownText, screenWidth / 2 - textWidth / 2, screenHeight / 2 - fontSize / 2, fontSize, color);
+            int textX = (GetScreenWidth() - textWidth) / 2;
+            int textY = (GetScreenHeight() - fontSize) / 2;
+
+            DrawText(countdownText, textX, textY, fontSize, RED);
         }
 
         EndDrawing();
-        //----------------------------------------------------------------------------------
     }
 
-    // De-Initialization
-    //--------------------------------------------------------------------------------------
-    for (int i = 0; i < 3; i++)
-        UnloadTexture(PlayerImages[i]);
-    CloseWindow(); // Close window and OpenGL context
-    //--------------------------------------------------------------------------------------
-
+    CloseWindow();
     return 0;
 }
