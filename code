@@ -32,7 +32,7 @@ typedef struct
 // --- Ammo system ---
 int maxBullets = 12,currentBullets = 12;
 bool reloading = false;
-float reloadTime = 2.0f, reloadTime2 = 0.0f;;
+float reloadTime = 2.0f, reloadTime2 = 0.0f;
 
 // tweak as you like
 #define MAX_BULLETS 128
