@@ -32,7 +32,7 @@ typedef struct
 // --- Ammo system ---
 int maxBullets = 12,currentBullets = 12;
 bool reloading = false;
-float reloadTime = 2.0f, reloadTime2 = 0.0f;
+float reloadTime = 2.5f, reloadTime2 = 0.0f;
 
 // tweak as you like
 #define MAX_BULLETS 128
@@ -67,14 +67,24 @@ int main(void)
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
     int positions[3] = {400, 700, 1000};
     Texture2D PlayerImages[3];
-    PlayerImages[0] = LoadTexture("C:/Users/henry/Downloads/ced.png");
-    PlayerImages[1] = LoadTexture("C:/Users/henry/Downloads/amiel.png");
-    PlayerImages[2] = LoadTexture("C:/Users/henry/Downloads/ian.png");
+    PlayerImages[0] = LoadTexture("D:/Downloads/ced.png");
+    PlayerImages[1] = LoadTexture("D:/Downloads/amiel.png");
+    PlayerImages[2] = LoadTexture("D:/Downloads/ian.png");
 
     Texture2D PlayerIngameImage[3];
-    PlayerIngameImage[0] = LoadTexture("C:/Users/henry/Downloads/ced_top.png");
-    PlayerIngameImage[1] = LoadTexture("C:/Users/henry/Downloads/amiel_top.png");
-    PlayerIngameImage[2] = LoadTexture("C:/Users/henry/Downloads/ian_top.png");
+    PlayerIngameImage[0] = LoadTexture("D:/Downloads/ced_top.png");
+    PlayerIngameImage[1] = LoadTexture("D:/Downloads/amiel_top.png");
+    PlayerIngameImage[2] = LoadTexture("D:/Downloads/ian_top.png");
+
+    InitAudioDevice();
+    Sound Confirm = LoadSound("D:/Downloads/Confirm.wav");
+    Sound Select = LoadSound("D:/Downloads/Select.wav");
+    Sound Countdown = LoadSound("D:/Downloads/Countdown.wav");
+    Sound Reload = LoadSound("D:/Downloads/reload.wav");
+     Sound Shooting = LoadSound("D:/Downloads/Shooting.wav");
+
+    Texture2D Background = LoadTexture("D:/Downloads/background.png");
+
 
     Character player;
     bool playerInitialized = false;
@@ -92,10 +102,23 @@ int main(void)
         if (state == STATE_MENU)
         {
             // --- Keyboard (2-item menu like original) ---
-            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
+           if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
+            {
+            if (menuIndex != 1)
+                {
                 menuIndex = 1;
+                PlaySound(Select);
+                }
+            }
+
             if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
+            {
+            if (menuIndex != 0)
+                {
                 menuIndex = 0;
+                PlaySound(Select);
+                }
+            }
 
             // --- Mouse setup: recompute centered positions like in DRAW (from first code) ---
             int rw = GetRenderWidth();
@@ -137,6 +160,8 @@ int main(void)
                     playerInitialized = false;
                     currentBullets = maxBullets;
                     reloading = false;
+                    PlaySound(Confirm);
+                    WaitTime(0.15f);
                 }
                 else if (menuIndex == 1)
                 {
@@ -173,17 +198,25 @@ int main(void)
                 playerInitialized = false;
                 currentBullets = maxBullets;
                 reloading = false;
+                PlaySound(Confirm);
             }
 
             if (!playerConfirmed)
             {
                 if (IsKeyPressed(KEY_RIGHT))
+                {
                     selectedplayers = (selectedplayers + 1) % 3;
+                    PlaySound(Select);
+                }
                 if (IsKeyPressed(KEY_LEFT))
+                {
                     selectedplayers = (selectedplayers - 1 + 3) % 3;
+                    PlaySound(Select);
+                }
 
                 if (IsKeyPressed(KEY_ENTER))
                     playerConfirmed = true;
+                    PlaySound(Confirm);
             }
             else if (playerConfirmed && !gameStarted)
             {
@@ -193,6 +226,8 @@ int main(void)
                     state = STATE_COUNTDOWN;
                     countdownActive = true;
                     countdownStartTime = GetTime();
+                    PlaySound(Confirm);
+                    PlaySound(Countdown);
                 }
             }
 
@@ -255,6 +290,7 @@ int main(void)
                 if ((IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonDown(MOUSE_LEFT_BUTTON)) &&
                     fireCooldown <= 0.0f && !reloading && currentBullets > 0)
                 {
+                    PlaySound(Shooting);
                     for (int i = 0; i < MAX_BULLETS; i++)
                     {
                         if (!bullets[i].active)
@@ -306,6 +342,7 @@ int main(void)
                 {
                     if (IsKeyPressed(KEY_R) && currentBullets < maxBullets)
                     {
+                        PlaySound(Reload);
                         reloading = true;
                         reloadTime2 = reloadTime;
                     }
@@ -395,7 +432,7 @@ int main(void)
         {
             if (gameStarted)
             {
-                ClearBackground(RAYWHITE);
+                 DrawTextureEx(Background, (Vector2){0, 0}, 0.0f, 1.3f, WHITE);
 
                 if (playerInitialized)
                 {
@@ -479,7 +516,16 @@ int main(void)
         }
 
         EndDrawing();
+
     }
+    UnloadSound(Select);
+    UnloadSound(Confirm);
+    UnloadSound(Countdown);
+    UnloadSound(Reload);
+    UnloadSound(Shooting);
+
+    CloseAudioDevice();
+    UnloadTexture(Background);
 
     CloseWindow();
     return 0;
