@@ -74,6 +74,9 @@ int main(void)
     Character player;
     bool playerInitialized = false;
     Bullet bullets[MAX_BULLETS] = {0};
+    // --- Shooting delay variables ---
+    float fireCooldown = 0.0f;      // counts down until we can shoot again
+    const float FIRE_DELAY = 0.20f; // seconds between shots (change for faster/slower fire)
 
     // Main game loop
     while (!WindowShouldClose()) // Detect window close button or ESC key
@@ -186,6 +189,8 @@ int main(void)
             if (gameStarted && playerInitialized)
             {
                 float dt = GetFrameTime();
+                if (fireCooldown > 0.0f)
+                    fireCooldown -= dt;
 
                 // movement input
                 Vector2 move = (Vector2){0, 0};
@@ -237,7 +242,8 @@ int main(void)
                 player.rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI) - 90.0f;
 
                 // --- SHOOT: spawn bullet on left click ---
-                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+                // --- SHOOT: spawn bullet on left click/hold with delay ---
+                if ((IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonDown(MOUSE_LEFT_BUTTON)) && fireCooldown <= 0.0f)
                 {
                     for (int i = 0; i < MAX_BULLETS; i++)
                     {
@@ -251,6 +257,8 @@ int main(void)
                             bullets[i].rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI);
                             bullets[i].life = BULLET_LIFE;
                             bullets[i].active = true;
+
+                            fireCooldown = FIRE_DELAY; // reset the timer so next shot waits
                             break;
                         }
                     }
@@ -383,7 +391,7 @@ int main(void)
                 {
                     DrawText("Loading player...", 630, 400, 30, RED);
                 }
-                
+
                 // --- draw bullets ---
                 for (int i = 0; i < MAX_BULLETS; i++)
                 {
