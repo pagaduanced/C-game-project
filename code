@@ -1,192 +1,277 @@
 #include "raylib.h"
 #include <stdio.h>
 
-typedef enum GameState
-{
+typedef enum GameState {
     STATE_MENU,
-    STATE_GAME,
-    STATE_COUNTDOWN
+    STATE_SELECT,     // player selection
+    STATE_COUNTDOWN,  // 3..2..1..START!
+    STATE_PLAY        // actual gameplay screen
 } GameState;
 
 int main(void)
 {
-    // Initialization
-    //--------------------------------------------------------------------------------------
-    const int screenWidth = 1600;
+    const int screenWidth  = 1600;
     const int screenHeight = 900;
 
-    InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
+    InitWindow(screenWidth, screenHeight, "OUT OF TOUCH");
+    SetExitKey(KEY_NULL);       // So ESC won't close the window
+    SetTargetFPS(60);
 
-    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
-
-    //--------------------------------------------------------------------------------------
+    // --- State & UI ---
     GameState state = STATE_MENU;
-    int menuIndex = 0; // 0 = "Start", 1 = "Quit"
-    int selectedplayers = 0;
-    bool playerConfirmed = false;
-    bool gameStarted = false;
+    int menuIndex = 0;              // 0 = Start, 1 = Quit
 
-    // Countdown variables
-    bool countdownActive = false;
-    float countdown = 3.0f;
-    double countdownStartTime = 0.0;
-
+    // --- Player select data ---
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
-    int positions[3] = {400, 700, 1000};
-    Texture2D PlayerImages[3];
-    PlayerImages[0] = LoadTexture("C:/Users/henry/Downloads/ced.png");
-    PlayerImages[1] = LoadTexture("C:/Users/henry/Downloads/ian.png");
-    PlayerImages[2] = LoadTexture("C:/Users/henry/Downloads/amiel.png");
+    Texture2D players[3];
+    // Replace with your actual paths (absolute or relative)
+    players[0] = LoadTexture("C:/VSCODE-RAYLIB/images/ian.png");
+    players[1] = LoadTexture("C:/VSCODE-RAYLIB/images/amiel.png");
+    players[2] = LoadTexture("C:/VSCODE-RAYLIB/images/ced.png");
 
-    // Main game loop
-    while (!WindowShouldClose()) // Detect window close button or ESC key
+    int selected = 0;
+    bool playerConfirmed = false;
+
+    // --- Countdown ---
+    double countdownStart = 0.0;
+    int countdownValue = 3; // shows 3,2,1, then START!
+
+    while (!WindowShouldClose())
     {
+        // =========================
+        // UPDATE
+        // =========================
         if (state == STATE_MENU)
         {
-            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
-                menuIndex = 1;
-            if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
-                menuIndex = 0;
+            // Keyboard move
+            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) menuIndex = 1;
+            if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) menuIndex = 0;
 
-            if (IsKeyPressed(KEY_ENTER))
-            {
-                if (menuIndex == 0)
-                    state = STATE_GAME;
-            }
-            else if (menuIndex == 1)
-            {
-                if (IsKeyPressed(KEY_ENTER))
-                {
-                    break; // this exits the program
+            // Compute centered menu item rects (same as draw)
+            int rw = GetRenderWidth();
+            int rh = GetRenderHeight();
+            int fontSize = 40;
+            const int padX = 24, padY = 10;
+
+            int startW = MeasureText("START GAME", fontSize);
+            int startX = (rw - startW)/2;
+            int startY = rh/2;
+            Rectangle rStart = (Rectangle){startX - padX, startY - padY, startW + 2*padX, fontSize + 2*padY};
+
+            int quitW = MeasureText("QUIT GAME", fontSize);
+            int quitX = (rw - quitW)/2;
+            int quitY = startY + 60;
+            Rectangle rQuit  = (Rectangle){quitX - padX, quitY - padY, quitW + 2*padX, fontSize + 2*padY};
+
+            // Mouse hover -> move selection
+            Vector2 m = GetMousePosition();
+            bool hoverStart = CheckCollisionPointRec(m, rStart);
+            bool hoverQuit  = CheckCollisionPointRec(m, rQuit);
+            if (hoverStart) menuIndex = 0;
+            if (hoverQuit)  menuIndex = 1;
+
+            // Confirm (keyboard)
+            if (IsKeyPressed(KEY_ENTER)) {
+                if (menuIndex == 0) {
+                    state = STATE_SELECT;
+                    playerConfirmed = false;
+                } else {
+                    break;
                 }
+            }
+            // Confirm (mouse)
+            if (hoverStart && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                state = STATE_SELECT;
+                playerConfirmed = false;
+            }
+            if (hoverQuit && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                break;
             }
         }
-        else if (state == STATE_GAME)
+        else if (state == STATE_SELECT)
         {
-            if (IsKeyPressed(KEY_ESCAPE))
-            {
+            // Back to menu
+            if (IsKeyPressed(KEY_ESCAPE)) {
                 state = STATE_MENU;
                 playerConfirmed = false;
-                gameStarted = false;
-                countdownActive = false;
-                countdown = 3.0f;
             }
 
-            if (!playerConfirmed)
-            {
-                if (IsKeyPressed(KEY_RIGHT))
-                    selectedplayers = (selectedplayers + 1) % 3;
-                if (IsKeyPressed(KEY_LEFT))
-                    selectedplayers = (selectedplayers - 1 + 3) % 3;
-
-                if (IsKeyPressed(KEY_ENTER))
-                    playerConfirmed = true;
+            // Navigation (only if not yet confirmed)
+            if (!playerConfirmed) {
+                if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) selected = (selected + 1) % 3;
+                if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) selected = (selected + 2) % 3; // +2 == -1 mod 3
             }
-            else if (playerConfirmed && !gameStarted)
-            {
-                // When player presses ENTER again, switch to countdown screen
-                if (IsKeyPressed(KEY_ENTER))
-                {
-                    state = STATE_COUNTDOWN;
-                    countdownActive = true;
-                    countdownStartTime = GetTime();
+
+            // Also allow mouse hover to change selection
+            int rw = GetRenderWidth();
+            int rh = GetRenderHeight();
+            int boxSize = 180;
+            int gap = 60;
+
+            int totalWidth = 3*boxSize + 2*gap;
+            int baseX = (rw - totalWidth)/2;
+            int baseY = rh/2 - boxSize/2;
+
+            Vector2 m = GetMousePosition();
+            for (int i = 0; i < 3; i++) {
+                Rectangle box = (Rectangle){ baseX + i*(boxSize + gap), baseY, boxSize, boxSize };
+                if (!playerConfirmed && CheckCollisionPointRec(m, box)) {
+                    selected = i;
+                    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                        playerConfirmed = true;  // click to confirm
+                    }
                 }
+            }
+
+            // Confirm with ENTER
+            if (!playerConfirmed && IsKeyPressed(KEY_ENTER)) {
+                playerConfirmed = true;
+            } else if (playerConfirmed && IsKeyPressed(KEY_ENTER)) {
+                // Start countdown
+                state = STATE_COUNTDOWN;
+                countdownStart = GetTime();
+                countdownValue = 3;
             }
         }
         else if (state == STATE_COUNTDOWN)
         {
-            double elapsed = GetTime() - countdownStartTime;
+            double t = GetTime() - countdownStart;
+            if      (t < 1.0) countdownValue = 3;
+            else if (t < 2.0) countdownValue = 2;
+            else if (t < 3.0) countdownValue = 1;
+            else if (t < 4.0) countdownValue = 0; // START!
+            else {
+                state = STATE_PLAY; // proceed to gameplay
+            }
 
-            if (elapsed < 1.0)
-                countdown = 3;
-            else if (elapsed < 2.0)
-                countdown = 2;
-            else if (elapsed < 3.0)
-                countdown = 1;
-            else if (elapsed < 4.0)
-                countdown = 0; // show START!
-            else
-            {
-                countdownActive = false;
-                gameStarted = true;
-                state = STATE_GAME; // proceed to actual game after countdown
+            if (IsKeyPressed(KEY_ESCAPE)) {
+                state = STATE_MENU;
+                playerConfirmed = false;
+            }
+        }
+        else if (state == STATE_PLAY)
+        {
+            if (IsKeyPressed(KEY_ESCAPE)) {
+                state = STATE_MENU;
+                playerConfirmed = false;
             }
         }
 
-        //-----------------------DRAWING AREA OF FUNCTIONS(BACKBONE)---------------------//
+        // =========================
+        // DRAW
+        // =========================
         BeginDrawing();
-
         ClearBackground(RAYWHITE);
 
         if (state == STATE_MENU)
         {
-            DrawText("OUT OF TOUCH", 600, 150, 50, BLACK);
+            int rw = GetRenderWidth();
+            int rh = GetRenderHeight();
 
-            Color startcolor = (menuIndex == 0) ? RED : DARKGRAY;
-            Color quitcolor = (menuIndex == 0) ? DARKGRAY : RED;
+            int titleSize  = 100;
+            int titleW     = MeasureText("OUT OF TOUCH", titleSize);
+            int titleX     = (rw - titleW)/2;
+            DrawText("OUT OF TOUCH", titleX, rh/4, titleSize, BLACK);
 
-            DrawText("START GAME", 650, 300, 40, startcolor);
-            DrawText("QUIT GAME", 670, 360, 40, quitcolor);
+            int fontSize = 40;
+            const int padX = 24, padY = 10;
 
-            DrawText("USE ARROWS UP AND DOWN TO CHOOSE AND PRESS ENTER TO SELECT", 420, 450, 20, GRAY);
+            int startW = MeasureText("START GAME", fontSize);
+            int startX = (rw - startW)/2;
+            int startY = rh/2;
+            Rectangle rStart = (Rectangle){startX - padX, startY - padY, startW + 2*padX, fontSize + 2*padY};
+
+            int quitW = MeasureText("QUIT GAME", fontSize);
+            int quitX = (rw - quitW)/2;
+            int quitY = startY + 60;
+            Rectangle rQuit  = (Rectangle){quitX - padX, quitY - padY, quitW + 2*padX, fontSize + 2*padY};
+
+            // Hover fill
+            Vector2 m = GetMousePosition();
+            if (CheckCollisionPointRec(m, rStart)) DrawRectangleRec(rStart, (Color){220,220,220,255});
+            if (CheckCollisionPointRec(m, rQuit))  DrawRectangleRec(rQuit,  (Color){220,220,220,255});
+
+            Color startColor = (menuIndex == 0) ? RED : DARKGRAY;
+            Color quitColor  = (menuIndex == 1) ? RED : DARKGRAY;
+            DrawText("START GAME", startX, startY, fontSize, startColor);
+            DrawText("QUIT GAME",  quitX,  quitY,  fontSize, quitColor);
+
+            int insSize = 20;
+            const char *ins = "USE UP/DOWN or MOUSE, ENTER to select";
+            int insW = MeasureText(ins, insSize);
+            DrawText(ins, (rw - insW)/2, quitY + 60, insSize, GRAY);
         }
-        else if (state == STATE_GAME)
+        else if (state == STATE_SELECT)
         {
-            if (gameStarted)
-            {
-                ClearBackground(RAYWHITE);
-                // DITO NA MAG START YUNG MISMONG LARO
-                DrawText("GAME STARTED!", 630, 400, 50, DARKGREEN);
-                EndDrawing();
-                continue;
+            int rw = GetRenderWidth();
+            int rh = GetRenderHeight();
+
+            DrawText("Select Your Player", rw/2 - MeasureText("Select Your Player", 50)/2, rh/6, 50, BLACK);
+            DrawText("ESC to menu | ENTER to confirm, ENTER again to start",
+                     rw/2 - MeasureText("ESC to menu | ENTER to confirm, ENTER again to start", 20)/2,
+                     rh/6 + 60, 20, GRAY);
+
+            int boxSize = 180;
+            int gap = 60;
+
+            int totalWidth = 3*boxSize + 2*gap;
+            int baseX = (rw - totalWidth)/2;
+            int baseY = rh/2 - boxSize/2;
+
+            for (int i = 0; i < 3; i++) {
+                Rectangle box = (Rectangle){ baseX + i*(boxSize + gap), baseY, boxSize, boxSize };
+
+                // Draw border (highlight selected)
+                Color border = (i == selected) ? RED : DARKBLUE;
+                DrawRectangleLinesEx(box, 3, border);
+
+                // Draw texture scaled to fit box
+                float sx = (float)box.width  / players[i].width;
+                float sy = (float)box.height / players[i].height;
+                float scale = (sx < sy ? sx : sy) * 0.9f; // keep inside box with margin
+
+                float drawW = players[i].width  * scale;
+                float drawH = players[i].height * scale;
+                float dx = box.x + (box.width  - drawW)/2.0f;
+                float dy = box.y + (box.height - drawH)/2.0f;
+
+                DrawTextureEx(players[i], (Vector2){dx, dy}, 0.0f, scale, WHITE);
+
+                // Draw name
+                int nameSize = 32;
+                int nameW = MeasureText(names[i], nameSize);
+                DrawText(names[i], box.x + (box.width - nameW)/2, box.y + box.height + 16, nameSize, border);
             }
 
-            DrawText("GAME RUNNING!", 610, 100, 40, DARKBLUE);
-            DrawText("Press ESC to return to menu", 620, 160, 20, GRAY);
-
-            for (int i = 0; i < 3; i++)
-            {
-                Color color = (i == selectedplayers) ? RED : DARKBLUE;
-                float scale = 150.0f / PlayerImages[i].width * 0.8f;
-                DrawTextureEx(PlayerImages[i], (Vector2){positions[i] + 10, 290}, 0.0f, scale, WHITE);
-                DrawRectangleLines(positions[i], 300, 150, 150, color);
-                int textWidth = MeasureText(names[i], 40);
-                DrawText(names[i], positions[i] + 75 - textWidth / 2, 460, 40, color);
-            }
-
-            if (playerConfirmed && !gameStarted)
-            {
-                DrawText(TextFormat("You chose: %s", names[selectedplayers]), 620, 600, 30, BLACK);
-                DrawText("Press ENTER again to start", 620, 640, 20, GRAY);
+            if (playerConfirmed) {
+                const char *msg = TextFormat("You chose: %s  |  Press ENTER to start", names[selected]);
+                int w = MeasureText(msg, 24);
+                DrawText(msg, rw/2 - w/2, baseY + boxSize + 70, 24, BLACK);
             }
         }
         else if (state == STATE_COUNTDOWN)
         {
-            // Separate countdown screen
-            ClearBackground(WHITE);
+            int rw = GetRenderWidth();
+            int rh = GetRenderHeight();
 
-            char countdownText[10];
-            if (countdown > 0)
-                sprintf(countdownText, "%d", (int)countdown);
-            else
-                sprintf(countdownText, "START!");
+            const char *txt = (countdownValue > 0) ? TextFormat("%d", countdownValue) : "START!";
+            int size = (countdownValue > 0) ? 200 : 100;
+            Color col = (countdownValue > 0) ? RED : GREEN;
 
-            int fontSize = (countdown > 0) ? 200 : 100;
-            Color color = (countdown > 0) ? RED : GREEN;
-            int textWidth = MeasureText(countdownText, fontSize);
-            DrawText(countdownText, screenWidth / 2 - textWidth / 2, screenHeight / 2 - fontSize / 2, fontSize, color);
+            int tw = MeasureText(txt, size);
+            DrawText(txt, rw/2 - tw/2, rh/2 - size/2, size, col);
+        }
+        else if (state == STATE_PLAY)
+        {
+            int rw = GetRenderWidth();
+            DrawText("GAME STARTED!", rw/2 - MeasureText("GAME STARTED!", 50)/2, 200, 50, DARKGREEN);
+            DrawText("Press ESC to return to menu", rw/2 - MeasureText("Press ESC to return to menu", 20)/2, 260, 20, GRAY);
         }
 
         EndDrawing();
-        //----------------------------------------------------------------------------------
     }
 
-    // De-Initialization
-    //--------------------------------------------------------------------------------------
-    for (int i = 0; i < 3; i++)
-        UnloadTexture(PlayerImages[i]);
-    CloseWindow(); // Close window and OpenGL context
-    //--------------------------------------------------------------------------------------
-
+    for (int i = 0; i < 3; i++) UnloadTexture(players[i]);
+    CloseWindow();
     return 0;
 }
