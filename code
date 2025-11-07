@@ -6,6 +6,7 @@ typedef enum GameState
 {
     STATE_MENU,
     STATE_GAME,
+    STATE_OPTIONS,
     STATE_COUNTDOWN
 } GameState;
 
@@ -29,16 +30,16 @@ typedef struct
     bool active;
 } Bullet;
 
-typedef struct Enemy {
+typedef struct
+{
     Vector2 pos;
     Vector2 vel;
     float rotationDeg;
     bool active;
 } Enemy;
 
-
 // --- Ammo system ---
-int maxBullets = 12, currentBullets = 12;
+int maxBullets = 15, currentBullets = 15;
 bool reloading = false;
 float reloadTime = 2.5f, reloadTime2 = 0.0f;
 
@@ -49,7 +50,14 @@ float reloadTime = 2.5f, reloadTime2 = 0.0f;
 #define BULLET_W 12.0f
 #define BULLET_H 4.0f
 #define MAX_ENEMIES 6
-#define ENEMY_SPEED 250.0f
+#define ENEMY_SPEED 175.0f
+#define PLAYER_MAX_HP 3
+#define PLAYER_MAX_HEALTH 3
+int playerHealth = PLAYER_MAX_HEALTH;
+bool playerInvulnerable = false;
+float playerInvulnTime = 1.0f; // seconds of i-frames after hit
+float playerInvulnTimer = 0.0f;
+
 Enemy enemies[MAX_ENEMIES] = {0};
 
 int main(void)
@@ -76,7 +84,7 @@ int main(void)
     double countdownStartTime = 0.0;
 
     // === Timer variables (changed to double for precision) ===
-    double gameTimer = 300.0;  // 5 minutes = 300 seconds
+    double gameTimer = 300.0; // 5 minutes = 300 seconds
     bool timerActive = false;
 
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
@@ -99,8 +107,7 @@ int main(void)
     Sound Reload = LoadSound("assets/reload.wav");
     Sound Shooting = LoadSound("assets/Shooting.wav");
 
-    Texture2D Background = LoadTexture("assets/background.png");
-
+    Texture2D Background = LoadTexture("assets/bgver2.png");
 
     Character player;
     bool playerInitialized = false;
@@ -118,21 +125,21 @@ int main(void)
         if (state == STATE_MENU)
         {
             // --- Keyboard (2-item menu like original) ---
-           if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
+            if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
             {
-            if (menuIndex != 1)
+                if (menuIndex != 1)
                 {
-                menuIndex = 1;
-                PlaySound(Select);
+                    menuIndex = 1;
+                    PlaySound(Select);
                 }
             }
 
             if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
             {
-            if (menuIndex != 0)
+                if (menuIndex != 0)
                 {
-                menuIndex = 0;
-                PlaySound(Select);
+                    menuIndex = 0;
+                    PlaySound(Select);
                 }
             }
 
@@ -179,6 +186,10 @@ int main(void)
                     // reset timer when entering game-selection screen
                     gameTimer = 300.0;
                     timerActive = false;
+                    playerHealth = PLAYER_MAX_HEALTH;
+                    playerInvulnerable = false;
+                    playerInvulnTimer = 0.0f;
+
                     PlaySound(Confirm);
                     WaitTime(0.15f);
                 }
@@ -220,6 +231,10 @@ int main(void)
                 currentBullets = maxBullets;
                 reloading = false;
                 timerActive = false; // stop timer
+                playerHealth = PLAYER_MAX_HEALTH;
+                playerInvulnerable = false;
+                playerInvulnTimer = 0.0f;
+
                 PlaySound(Confirm);
             }
 
@@ -259,6 +274,15 @@ int main(void)
             if (gameStarted && playerInitialized)
             {
                 float dt = GetFrameTime();
+                if (playerInvulnerable)
+                {
+                    playerInvulnTimer -= dt;
+                    if (playerInvulnTimer <= 0.0f)
+                    {
+                        playerInvulnerable = false;
+                    }
+                }
+                // --- update fire cooldown ---
                 if (fireCooldown > 0.0f)
                     fireCooldown -= dt;
 
@@ -307,6 +331,15 @@ int main(void)
                     player.pos.x = screenWidth - pw;
                 if (player.pos.y > screenHeight - ph)
                     player.pos.y = screenHeight - ph;
+
+                float hitScale = 0.8f; // adjust between 0.5–1.0 (smaller = easier)
+                float shrinkX = pw * (1.0f - hitScale) * 0.5f;
+                float shrinkY = ph * (1.0f - hitScale) * 0.5f;
+                Rectangle playerRect = {
+                    player.pos.x + shrinkX,
+                    player.pos.y + shrinkY,
+                    pw * hitScale,
+                    ph * hitScale};
 
                 // --- AIM: rotate player to face mouse ---
                 Vector2 mouse = GetMousePosition();
@@ -362,67 +395,136 @@ int main(void)
                         bullets[i].active = false;
                     }
                 }
-               // Spawn multiple enemies at once
-            int enemiesToSpawn = GetRandomValue(1, 2);
-            for (int e = 0; e < enemiesToSpawn; e++)
-            {
+                // Spawn multiple enemies at once
+                int enemiesToSpawn = GetRandomValue(1, 2);
+                for (int e = 0; e < enemiesToSpawn; e++)
+                {
                     for (int i = 0; i < MAX_ENEMIES; i++)
+                    {
+                        if (!enemies[i].active)
+                        {
+                            int corner = GetRandomValue(0, 3);
+                            switch (corner)
+                            {
+                            case 0:
+                                enemies[i].pos = (Vector2){0, 0};
+                                break;
+                            case 1:
+                                enemies[i].pos = (Vector2){screenWidth - 40, 0};
+                                break;
+                            case 2:
+                                enemies[i].pos = (Vector2){0, screenHeight - 40};
+                                break;
+                            case 3:
+                                enemies[i].pos = (Vector2){screenWidth - 40, screenHeight - 40};
+                                break;
+                            }
+                            enemies[i].active = true;
+                            break; // go to next enemy slot
+                        }
+                    }
+                }
+
+                // Move enemies toward player
+                for (int i = 0; i < MAX_ENEMIES; i++)
                 {
                     if (!enemies[i].active)
+                        continue;
+                    Vector2 dir = {
+                        (player.pos.x + player.tex.width * player.scale / 2) - enemies[i].pos.x,
+                        (player.pos.y + player.tex.height * player.scale / 2) - enemies[i].pos.y};
+                    float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+                    if (len > 0)
                     {
-                        int corner = GetRandomValue(0, 3);
-                        switch (corner)
-                    {
-                        case 0: enemies[i].pos = (Vector2){0, 0}; break;
-                        case 1: enemies[i].pos = (Vector2){screenWidth - 40, 0}; break;
-                        case 2: enemies[i].pos = (Vector2){0, screenHeight - 40}; break;
-                        case 3: enemies[i].pos = (Vector2){screenWidth - 40, screenHeight - 40}; break;
+                        dir.x /= len;
+                        dir.y /= len;
                     }
-                        enemies[i].active = true;
-                        break; // go to next enemy slot
-                    }
+
+                    enemies[i].pos.x += dir.x * ENEMY_SPEED * dt;
+                    enemies[i].pos.y += dir.y * ENEMY_SPEED * dt;
+                    enemies[i].rotationDeg = atan2f(dir.y, dir.x) * RAD2DEG + 90.0f;
                 }
-            }
 
-        // Move enemies toward player
-        for (int i = 0; i < MAX_ENEMIES; i++)
-        {
-        if (!enemies[i].active) continue;
-        Vector2 dir = {
-            (player.pos.x + player.tex.width * player.scale / 2) - enemies[i].pos.x,
-            (player.pos.y + player.tex.height * player.scale / 2) - enemies[i].pos.y
-        };
-        float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
-        if (len > 0)
-        {
-            dir.x /= len;
-            dir.y /= len;
-        }
-
-            enemies[i].pos.x += dir.x * ENEMY_SPEED * dt;
-            enemies[i].pos.y += dir.y * ENEMY_SPEED * dt;
-            enemies[i].rotationDeg = atan2f(dir.y, dir.x) * RAD2DEG;
-        }
-        // --- Bullet vs Enemy collision ---
-        float enemyScale = 0.2f;
-        float enemyW = Enemy.width * enemyScale;
-        float enemyH = Enemy.height * enemyScale;
-        for (int i = 0; i < MAX_BULLETS; i++)
-        {
-                if (!bullets[i].active) continue;
-                Rectangle bulletRect = {bullets[i].pos.x - BULLET_W / 2, bullets[i].pos.y - BULLET_H / 2, BULLET_W, BULLET_H};
-                for (int j = 0; j < MAX_ENEMIES; j++)
-            {
-                    if (!enemies[j].active) continue;
-                    Rectangle enemyRect = {enemies[j].pos.x, enemies[j].pos.y, enemyW, enemyH};
-                    if (CheckCollisionRecs(bulletRect, enemyRect))
+                // --- Enemy hits player ---
+                for (int i = 0; i < MAX_ENEMIES; i++)
                 {
-                    enemies[j].active = false;  // enemy dies 💀
-                    bullets[i].active = false;  // bullet disappears 💥
-                    break;
+                    if (!enemies[i].active)
+                        continue;
+
+                    float enemyScale = 0.2f;
+                    float enemyW = Enemy.width * enemyScale;
+                    float enemyH = Enemy.height * enemyScale;
+
+                    Rectangle enemyRect = {
+                        enemies[i].pos.x - enemyW * 0.5f,
+                        enemies[i].pos.y - enemyH * 0.5f,
+                        enemyW,
+                        enemyH};
+
+                    if (!playerInvulnerable && CheckCollisionRecs(playerRect, enemyRect))
+                    {
+                        // enemy touched player -> damage
+                        playerHealth--;
+                        playerInvulnerable = true;
+                        playerInvulnTimer = playerInvulnTime;
+
+                        enemies[i].active = false;
+
+                        // check death
+                        if (playerHealth <= 0)
+                        {
+                            // simple game-over: back to menu & reset (you can later make a real screen)
+                            state = STATE_MENU;
+                            playerConfirmed = false;
+                            gameStarted = false;
+                            countdownActive = false;
+                            playerInitialized = false;
+                            currentBullets = maxBullets;
+                            reloading = false;
+                            timerActive = false;
+                            playerHealth = PLAYER_MAX_HEALTH;
+                        }
+                    }
                 }
-            }
-        }
+
+                // --- Bullet vs Enemy collision ---
+                float enemyScale = 0.2f;
+                float enemyW = Enemy.width * enemyScale;
+                float enemyH = Enemy.height * enemyScale;
+
+                for (int i = 0; i < MAX_BULLETS; i++)
+                {
+                    if (!bullets[i].active)
+                        continue;
+
+                    // bullet hitbox (centered)
+                    Rectangle bulletRect = {
+                        bullets[i].pos.x - BULLET_W * 0.5f,
+                        bullets[i].pos.y - BULLET_H * 0.5f,
+                        BULLET_W,
+                        BULLET_H};
+
+                    for (int j = 0; j < MAX_ENEMIES; j++)
+                    {
+                        if (!enemies[j].active)
+                            continue;
+
+                        // enemy hitbox (centered)
+                        Rectangle enemyRect = {
+                            enemies[j].pos.x - enemyW * 0.5f,
+                            enemies[j].pos.y - enemyH * 0.5f,
+                            enemyW,
+                            enemyH};
+
+                        if (CheckCollisionRecs(bulletRect, enemyRect))
+                        {
+                            // 💥 Collision detected!
+                            enemies[j].active = false; // enemy dies
+                            bullets[i].active = false; // bullet disappears
+                            break;                     // stop checking this bullet
+                        }
+                    }
+                }
 
                 // Reload bullets ---
                 if (reloading)
@@ -532,7 +634,7 @@ int main(void)
         {
             if (gameStarted)
             {
-                 DrawTextureEx(Background, (Vector2){0, 0}, 0.0f, 1.3f, WHITE);
+                DrawTextureEx(Background, (Vector2){0, 0}, 0.0f, 1.3f, WHITE);
 
                 if (playerInitialized)
                 {
@@ -545,7 +647,6 @@ int main(void)
                     Vector2 origin = (Vector2){dst.width * 0.5f, dst.height * 0.5f};
 
                     DrawTexturePro(player.tex, src, dst, origin, player.rotationDeg, WHITE);
-
                     // --- Display ammo info ---
                     if (reloading)
                     {
@@ -557,7 +658,6 @@ int main(void)
                         if (currentBullets == 0)
                             DrawText("Out of bullets! Press R to reload!", 50, 90, 20, GRAY);
                     }
-
                     // --- time remaining ---
                     {
                         int minutes = (int)(gameTimer / 60.0);
@@ -585,15 +685,21 @@ int main(void)
                 }
                 // Draw enemies
                 for (int i = 0; i < MAX_ENEMIES; i++)
-                    {
-                    if (!enemies[i].active) continue;
+                {
+                    if (!enemies[i].active)
+                        continue;
                     float scale = 0.2f;
-                    Vector2 origin = { Enemy.width * scale / 2, Enemy.height * scale / 2 };
+                    Vector2 origin = {Enemy.width * scale / 2, Enemy.height * scale / 2};
                     DrawTexturePro(Enemy,
-                        (Rectangle){ 0, 0, Enemy.width, Enemy.height },
-                        (Rectangle){ enemies[i].pos.x, enemies[i].pos.y, Enemy.width * scale, Enemy.height * scale },origin,enemies[i].rotationDeg,WHITE);
-                    }
-
+                                   (Rectangle){0, 0, Enemy.width, Enemy.height},
+                                   (Rectangle){enemies[i].pos.x, enemies[i].pos.y, Enemy.width * scale, Enemy.height * scale}, origin, enemies[i].rotationDeg, WHITE);
+                }
+                // --- Draw health ---
+                for (int i = 0; i < PLAYER_MAX_HEALTH; i++)
+                {
+                    Color c = (i < playerHealth) ? RED : (Color){150, 150, 150, 255};
+                    DrawRectangle(50 + i * 30, 100, 20, 20, c); // simple squares as hearts
+                }
                 EndDrawing();
                 continue;
             }
@@ -636,7 +742,6 @@ int main(void)
         }
 
         EndDrawing();
-
     }
     UnloadSound(Select);
     UnloadSound(Confirm);
