@@ -51,8 +51,6 @@ float reloadTime = 2.5f, reloadTime2 = 0.0f;
 #define MAX_ENEMIES 6
 #define ENEMY_SPEED 250.0f
 Enemy enemies[MAX_ENEMIES] = {0};
-float enemySpawnTimer = 0.0f;
-float enemySpawnDelay = 2.0f;
 
 int main(void)
 {
