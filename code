@@ -30,7 +30,7 @@ typedef struct
 } Bullet;
 
 // --- Ammo system ---
-int maxBullets = 12,currentBullets = 12;
+int maxBullets = 12, currentBullets = 12;
 bool reloading = false;
 float reloadTime = 2.5f, reloadTime2 = 0.0f;
 
@@ -64,6 +64,10 @@ int main(void)
     float countdown = 3.0f;
     double countdownStartTime = 0.0;
 
+    // === Timer variables (changed to double for precision) ===
+    double gameTimer = 300.0;  // 5 minutes = 300 seconds
+    bool timerActive = false;
+
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
     int positions[3] = {400, 700, 1000};
     Texture2D PlayerImages[3];
@@ -83,7 +87,7 @@ int main(void)
     Sound Reload = LoadSound("assets/reload.wav");
     Sound Shooting = LoadSound("assets/Shooting.wav");
 
-    Texture2D Background = LoadTexture("assets/background.png");
+    Texture2D Background = LoadTexture("assets/background.jpg");
 
 
     Character player;
@@ -160,6 +164,9 @@ int main(void)
                     playerInitialized = false;
                     currentBullets = maxBullets;
                     reloading = false;
+                    // reset timer when entering game-selection screen
+                    gameTimer = 300.0;
+                    timerActive = false;
                     PlaySound(Confirm);
                     WaitTime(0.15f);
                 }
@@ -180,6 +187,8 @@ int main(void)
                 playerInitialized = false;
                 currentBullets = maxBullets;
                 reloading = false;
+                gameTimer = 300.0;
+                timerActive = false;
             }
             if (hoverQuit && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
@@ -198,6 +207,7 @@ int main(void)
                 playerInitialized = false;
                 currentBullets = maxBullets;
                 reloading = false;
+                timerActive = false; // stop timer
                 PlaySound(Confirm);
             }
 
@@ -239,6 +249,17 @@ int main(void)
                 float dt = GetFrameTime();
                 if (fireCooldown > 0.0f)
                     fireCooldown -= dt;
+
+                // === update game timer if active ===
+                if (timerActive && gameTimer > 0.0)
+                {
+                    gameTimer -= dt;
+                    if (gameTimer <= 0.0)
+                    {
+                        gameTimer = 0.0;
+                        timerActive = false; // stop at zero (you may add game-over logic here)
+                    }
+                }
 
                 // movement input
                 Vector2 move = (Vector2){0, 0};
@@ -379,6 +400,10 @@ int main(void)
                 playerInitialized = true;
                 currentBullets = maxBullets;
                 reloading = false;
+
+                // === Start the 5-minute timer (double) ===
+                gameTimer = 300.0;
+                timerActive = true;
             }
         }
 
@@ -458,6 +483,16 @@ int main(void)
                         DrawText(TextFormat("Bullets: %d / %d", currentBullets, maxBullets), 50, 50, 30, DARKBLUE);
                         if (currentBullets == 0)
                             DrawText("Out of bullets! Press R to reload!", 50, 90, 20, GRAY);
+                    }
+
+                    // --- time remaining ---
+                    {
+                        int minutes = (int)(gameTimer / 60.0);
+                        int seconds = (int)fmod(gameTimer, 60.0);
+                        char timeremaining[32];
+                        sprintf(timeremaining, "Time remaining: %02d:%02d", minutes, seconds);
+                        int tw = MeasureText(timeremaining, 30);
+                        DrawText(timeremaining, screenWidth - tw - 20, 40, 30, DARKGREEN);
                     }
                 }
                 else
