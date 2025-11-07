@@ -332,7 +332,7 @@ int main(void)
                 if (player.pos.y > screenHeight - ph)
                     player.pos.y = screenHeight - ph;
 
-                float hitScale = 0.8f; // adjust between 0.5–1.0 (smaller = easier)
+                float hitScale = 0.5f; // adjust between 0.5–1.0 (smaller = easier)
                 float shrinkX = pw * (1.0f - hitScale) * 0.5f;
                 float shrinkY = ph * (1.0f - hitScale) * 0.5f;
                 Rectangle playerRect = {
@@ -699,6 +699,7 @@ int main(void)
                 {
                     Color c = (i < playerHealth) ? RED : (Color){150, 150, 150, 255};
                     DrawRectangle(50 + i * 30, 100, 20, 20, c); // simple squares as hearts
+                    DrawText("<3",  50 + i * 30 - 2, 98, 20, RAYWHITE);
                 }
                 EndDrawing();
                 continue;
