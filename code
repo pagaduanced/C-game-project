@@ -29,6 +29,14 @@ typedef struct
     bool active;
 } Bullet;
 
+typedef struct Enemy {
+    Vector2 pos;
+    Vector2 vel;
+    float rotationDeg;
+    bool active;
+} Enemy;
+
+
 // --- Ammo system ---
 int maxBullets = 12, currentBullets = 12;
 bool reloading = false;
@@ -40,6 +48,11 @@ float reloadTime = 2.5f, reloadTime2 = 0.0f;
 #define BULLET_LIFE 1.5f
 #define BULLET_W 12.0f
 #define BULLET_H 4.0f
+#define MAX_ENEMIES 6
+#define ENEMY_SPEED 250.0f
+Enemy enemies[MAX_ENEMIES] = {0};
+float enemySpawnTimer = 0.0f;
+float enemySpawnDelay = 2.0f;
 
 int main(void)
 {
@@ -70,6 +83,7 @@ int main(void)
 
     const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
     int positions[3] = {400, 700, 1000};
+    Texture2D Enemy = LoadTexture("assets/enemy.png");
     Texture2D PlayerImages[3];
     PlayerImages[0] = LoadTexture("assets/ced.png");
     PlayerImages[1] = LoadTexture("assets/amiel.png");
@@ -87,7 +101,7 @@ int main(void)
     Sound Reload = LoadSound("assets/reload.wav");
     Sound Shooting = LoadSound("assets/Shooting.wav");
 
-    Texture2D Background = LoadTexture("assets/background.jpg");
+    Texture2D Background = LoadTexture("assets/background.png");
 
 
     Character player;
@@ -350,6 +364,67 @@ int main(void)
                         bullets[i].active = false;
                     }
                 }
+               // Spawn multiple enemies at once
+            int enemiesToSpawn = GetRandomValue(1, 2);
+            for (int e = 0; e < enemiesToSpawn; e++)
+            {
+                    for (int i = 0; i < MAX_ENEMIES; i++)
+                {
+                    if (!enemies[i].active)
+                    {
+                        int corner = GetRandomValue(0, 3);
+                        switch (corner)
+                    {
+                        case 0: enemies[i].pos = (Vector2){0, 0}; break;
+                        case 1: enemies[i].pos = (Vector2){screenWidth - 40, 0}; break;
+                        case 2: enemies[i].pos = (Vector2){0, screenHeight - 40}; break;
+                        case 3: enemies[i].pos = (Vector2){screenWidth - 40, screenHeight - 40}; break;
+                    }
+                        enemies[i].active = true;
+                        break; // go to next enemy slot
+                    }
+                }
+            }
+
+        // Move enemies toward player
+        for (int i = 0; i < MAX_ENEMIES; i++)
+        {
+        if (!enemies[i].active) continue;
+        Vector2 dir = {
+            (player.pos.x + player.tex.width * player.scale / 2) - enemies[i].pos.x,
+            (player.pos.y + player.tex.height * player.scale / 2) - enemies[i].pos.y
+        };
+        float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+        if (len > 0)
+        {
+            dir.x /= len;
+            dir.y /= len;
+        }
+
+            enemies[i].pos.x += dir.x * ENEMY_SPEED * dt;
+            enemies[i].pos.y += dir.y * ENEMY_SPEED * dt;
+            enemies[i].rotationDeg = atan2f(dir.y, dir.x) * RAD2DEG;
+        }
+        // --- Bullet vs Enemy collision ---
+        float enemyScale = 0.2f;
+        float enemyW = Enemy.width * enemyScale;
+        float enemyH = Enemy.height * enemyScale;
+        for (int i = 0; i < MAX_BULLETS; i++)
+        {
+                if (!bullets[i].active) continue;
+                Rectangle bulletRect = {bullets[i].pos.x - BULLET_W / 2, bullets[i].pos.y - BULLET_H / 2, BULLET_W, BULLET_H};
+                for (int j = 0; j < MAX_ENEMIES; j++)
+            {
+                    if (!enemies[j].active) continue;
+                    Rectangle enemyRect = {enemies[j].pos.x, enemies[j].pos.y, enemyW, enemyH};
+                    if (CheckCollisionRecs(bulletRect, enemyRect))
+                {
+                    enemies[j].active = false;  // enemy dies 💀
+                    bullets[i].active = false;  // bullet disappears 💥
+                    break;
+                }
+            }
+        }
 
                 // Reload bullets ---
                 if (reloading)
@@ -510,6 +585,16 @@ int main(void)
                     Vector2 borg = (Vector2){BULLET_W * 0.5f, BULLET_H * 0.5f};
                     DrawRectanglePro(bdst, borg, bullets[i].rotationDeg, BLUE);
                 }
+                // Draw enemies
+                for (int i = 0; i < MAX_ENEMIES; i++)
+                    {
+                    if (!enemies[i].active) continue;
+                    float scale = 0.2f;
+                    Vector2 origin = { Enemy.width * scale / 2, Enemy.height * scale / 2 };
+                    DrawTexturePro(Enemy,
+                        (Rectangle){ 0, 0, Enemy.width, Enemy.height },
+                        (Rectangle){ enemies[i].pos.x, enemies[i].pos.y, Enemy.width * scale, Enemy.height * scale },origin,enemies[i].rotationDeg,WHITE);
+                    }
 
                 EndDrawing();
                 continue;
