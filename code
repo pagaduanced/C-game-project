@@ -214,6 +214,7 @@ int main(void)
                 reloading = false;
                 gameTimer = 300.0;
                 timerActive = false;
+                PlaySound(Confirm);
             }
             if (hoverQuit && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
@@ -766,6 +767,7 @@ int main(void)
             if (hoverNext && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
                 state = STATE_SCORE;
+                PlaySound(Confirm);
             }
         }
 
@@ -826,6 +828,7 @@ int main(void)
                 playerInvulnerable = false;
                 playerInvulnTimer = 0.0f;
                 gameTimer = 300.0;
+                PlaySound(Confirm);
             }
         }
 
