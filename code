@@ -7,7 +7,9 @@ typedef enum GameState
     STATE_MENU,
     STATE_GAME,
     STATE_OPTIONS,
-    STATE_COUNTDOWN
+    STATE_COUNTDOWN,
+    STATE_GAMEOVER,
+    STATE_SCORE
 } GameState;
 
 // add this field to your Character struct:
@@ -39,7 +41,7 @@ typedef struct
 } Enemy;
 
 // --- Ammo system ---
-int maxBullets = 15, currentBullets = 15;
+int maxBullets = 125, currentBullets = 125;
 bool reloading = false;
 float reloadTime = 2.5f, reloadTime2 = 0.0f;
 
@@ -474,7 +476,7 @@ int main(void)
                         if (playerHealth <= 0)
                         {
                             // simple game-over: back to menu & reset (you can later make a real screen)
-                            state = STATE_MENU;
+                            state = STATE_GAMEOVER;
                             playerConfirmed = false;
                             gameStarted = false;
                             countdownActive = false;
@@ -594,9 +596,9 @@ int main(void)
             int rh = GetRenderHeight();
 
             int titleSize = 100;
-            int titleWidth = MeasureText("OUT OF TOUCH", titleSize);
+            int titleWidth = MeasureText("ALIEN RAID", titleSize);
             int titleX = (rw - titleWidth) / 2;
-            DrawText("OUT OF TOUCH", titleX, rh / 4, titleSize, BLACK);
+            DrawText("ALIEN RAID", titleX, rh / 4, titleSize, BLACK);
 
             int fontSize = 40;
             const int padX = 24, padY = 10;
@@ -740,6 +742,91 @@ int main(void)
             int textY = (GetScreenHeight() - fontSize) / 2;
 
             DrawText(countdownText, textX, textY, fontSize, RED);
+        }
+        else if (state == STATE_GAMEOVER)
+        {
+            ClearBackground(WHITE);
+            const char *text = "GAME OVER";
+            int fontSize = 120;
+            int tw = MeasureText(text, fontSize);
+            DrawText(text, (screenWidth - tw) / 2, screenHeight / 3, fontSize, RED);
+
+            // Next button
+            const char *nextText = "NEXT";
+            int nextSize = 50;
+            int nextW = MeasureText(nextText, nextSize);
+            Rectangle nextBtn = {(float)(screenWidth - nextW) / 2 - 20, (float)(screenHeight / 2) + 100, (float)nextW + 40, 80};
+
+            Vector2 m = GetMousePosition();
+            bool hoverNext = CheckCollisionPointRec(m, nextBtn);
+
+            DrawRectangleRec(nextBtn, hoverNext ? DARKGRAY : GRAY);
+            DrawText(nextText, nextBtn.x + 20, nextBtn.y + 15, nextSize, WHITE);
+
+            if (hoverNext && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+            {
+                state = STATE_SCORE;
+            }
+        }
+
+        else if (state == STATE_SCORE)
+        {
+            ClearBackground(RAYWHITE);
+
+            // --- Determine rating based on time survived ---
+            const char *rank;
+            double timeSurvived = 300.0 - gameTimer; // how long player lasted
+
+            if (timeSurvived >= 300.0)
+                rank = "S";
+            else if (timeSurvived >= 180.0)
+                rank = "A";
+            else if (timeSurvived >= 90.0)
+                rank = "B";
+            else
+                rank = "C";
+
+            char result[64];
+            sprintf(result, "Your Rating: %s", rank);
+            int fontSize = 100;
+            int textW = MeasureText(result, fontSize);
+            DrawText(result, (screenWidth - textW) / 2, screenHeight / 3, fontSize, BLACK);
+
+            char timeStr[64];
+            int minutes = (int)(timeSurvived / 60);
+            int seconds = (int)fmod(timeSurvived, 60);
+            sprintf(timeStr, "Time Survived: %02d:%02d", minutes, seconds);
+            int timeW = MeasureText(timeStr, 40);
+            DrawText(timeStr, (screenWidth - timeW) / 2, screenHeight / 2, 40, DARKGRAY);
+
+            // Back to menu button
+            const char *menuText = "BACK TO MENU";
+            int menuSize = 40;
+            int menuW = MeasureText(menuText, menuSize);
+            Rectangle menuBtn = {(float)(screenWidth - menuW) / 2 - 20, (float)(screenHeight / 2) + 120, (float)menuW + 40, 70};
+
+            Vector2 m = GetMousePosition();
+            bool hoverMenu = CheckCollisionPointRec(m, menuBtn);
+
+            DrawRectangleRec(menuBtn, hoverMenu ? LIGHTGRAY : GRAY);
+            DrawText(menuText, menuBtn.x + 20, menuBtn.y + 15, menuSize, BLACK);
+
+            if (hoverMenu && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+            {
+                // reset everything and go back
+                state = STATE_MENU;
+                playerConfirmed = false;
+                gameStarted = false;
+                countdownActive = false;
+                playerInitialized = false;
+                currentBullets = maxBullets;
+                reloading = false;
+                timerActive = false;
+                playerHealth = PLAYER_MAX_HEALTH;
+                playerInvulnerable = false;
+                playerInvulnTimer = 0.0f;
+                gameTimer = 300.0;
+            }
         }
 
         EndDrawing();
