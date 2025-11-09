@@ -108,6 +108,13 @@ int main(void)
     Sound Countdown = LoadSound("assets/Countdown.wav");
     Sound Reload = LoadSound("assets/reload.wav");
     Sound Shooting = LoadSound("assets/Shooting.wav");
+    Sound Lose = LoadSound("assets/lose.wav");
+    Sound Ingame = LoadSound("assets/ingame.wav");
+    Sound Damaged = LoadSound("assets/damaged.wav");
+    Sound Enemies_Death = LoadSound("assets/edead.wav");
+    Sound Game_Music = LoadSound("assets/Intro music.wav");
+    PlaySound(Game_Music);
+
 
     Texture2D Background = LoadTexture("assets/bgver2.png");
 
@@ -237,8 +244,11 @@ int main(void)
                 playerHealth = PLAYER_MAX_HEALTH;
                 playerInvulnerable = false;
                 playerInvulnTimer = 0.0f;
-
                 PlaySound(Confirm);
+                if (IsSoundPlaying(Ingame))
+                    StopSound(Ingame);
+                    if (!IsSoundPlaying(Game_Music))
+                    PlaySound(Game_Music);
             }
 
             if (!playerConfirmed)
@@ -270,6 +280,7 @@ int main(void)
                     countdownStartTime = GetTime();
                     PlaySound(Confirm);
                     PlaySound(Countdown);
+                    StopSound(Game_Music);
                 }
             }
 
@@ -467,6 +478,7 @@ int main(void)
                     if (!playerInvulnerable && CheckCollisionRecs(playerRect, enemyRect))
                     {
                         // enemy touched player -> damage
+                        PlaySound(Damaged);
                         playerHealth--;
                         playerInvulnerable = true;
                         playerInvulnTimer = playerInvulnTime;
@@ -486,6 +498,8 @@ int main(void)
                             reloading = false;
                             timerActive = false;
                             playerHealth = PLAYER_MAX_HEALTH;
+                            PlaySound(Lose);
+                            StopSound(Ingame);
                         }
                     }
                 }
@@ -522,6 +536,7 @@ int main(void)
                         if (CheckCollisionRecs(bulletRect, enemyRect))
                         {
                             // 💥 Collision detected!
+                            PlaySound(Enemies_Death);
                             enemies[j].active = false; // enemy dies
                             bullets[i].active = false; // bullet disappears
                             break;                     // stop checking this bullet
@@ -634,6 +649,7 @@ int main(void)
             DrawText(tip, insX, insY, insfontSize, GRAY);
         }
         else if (state == STATE_GAME)
+
         {
             if (gameStarted)
             {
@@ -733,9 +749,14 @@ int main(void)
 
             char countdownText[10];
             if (countdown > 0)
-                sprintf(countdownText, "%d", (int)countdown);
+            {
+             sprintf(countdownText, "%d", (int)countdown);
+            }
             else
+            {
                 sprintf(countdownText, "START!");
+                PlaySound(Ingame);
+            }
 
             int fontSize = 150;
             int textWidth = MeasureText(countdownText, fontSize);
@@ -829,6 +850,7 @@ int main(void)
                 playerInvulnTimer = 0.0f;
                 gameTimer = 300.0;
                 PlaySound(Confirm);
+                PlaySound(Game_Music);
             }
         }
 
@@ -839,7 +861,11 @@ int main(void)
     UnloadSound(Countdown);
     UnloadSound(Reload);
     UnloadSound(Shooting);
-
+    UnloadSound(Lose);
+    UnloadSound(Ingame);
+    UnloadSound(Game_Music);
+    UnloadSound(Damaged);
+    UnloadSound(Enemies_Death);
     CloseAudioDevice();
     UnloadTexture(Background);
 
