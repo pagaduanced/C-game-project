@@ -287,29 +287,41 @@ int main(void)
             // --- Live gameplay (only when game started and player is ready) ---
             if (gameStarted && playerInitialized)
             {
-                float dt = GetFrameTime();
-                if (playerInvulnerable)
-                {
-                    playerInvulnTimer -= dt;
-                    if (playerInvulnTimer <= 0.0f)
-                    {
-                        playerInvulnerable = false;
-                    }
-                }
-                // --- update fire cooldown ---
-                if (fireCooldown > 0.0f)
-                    fireCooldown -= dt;
+                float dt = GetFrameTime(); // get time since last frame
 
-                // === update game timer if active ===
-                if (timerActive && gameTimer > 0.0)
-                {
-                    gameTimer -= dt;
-                    if (gameTimer <= 0.0)
-                    {
-                        gameTimer = 0.0;
-                        timerActive = false; // stop at zero (you may add game-over logic here)
-                    }
+                if (playerInvulnerable)
+            {
+                playerInvulnTimer -= dt;
+                if (playerInvulnTimer <= 0.0f)
+            {
+                playerInvulnerable = false;
+            }
+        }
+
+        // --- update fire cooldown ---
+        if (fireCooldown > 0.0f)
+            fireCooldown -= dt;
+
+        // === update game timer if active ===
+         if (timerActive)
+        {
+            gameTimer -= dt; // subtract real time in seconds
+            if (gameTimer <= 0.0)
+            {
+                gameTimer = 0.0;
+                timerActive = false;
+                state = STATE_GAMEOVER; // switch to game over
+                playerConfirmed = false;
+                gameStarted = false;
+                countdownActive = false;
+                playerInitialized = false;
+                currentBullets = maxBullets;
+                reloading = false;
+                playerHealth = PLAYER_MAX_HEALTH;
+                playerInvulnerable = false;
+                playerInvulnTimer = 0.0f;
                 }
+            }
 
                 // movement input
                 Vector2 move = (Vector2){0, 0};
