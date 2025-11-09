@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <math.h>
 
+// --------------------------------------------------------
+// Types
+// --------------------------------------------------------
+
 typedef enum GameState
 {
     STATE_MENU,
@@ -12,21 +16,19 @@ typedef enum GameState
     STATE_SCORE
 } GameState;
 
-// add this field to your Character struct:
 typedef struct
 {
-    Texture2D tex;
-    Vector2 pos;
+    Texture2D texture;
+    Vector2 position;
     float speed;
     float scale;
-    float rotationDeg; // NEW: current rotation in degrees
-} Character;
+    float rotationDeg;
+} Player;
 
-// add this NEW type below Character
 typedef struct
 {
-    Vector2 pos;
-    Vector2 vel;
+    Vector2 position;
+    Vector2 velocity;
     float rotationDeg;
     float life; // seconds remaining
     bool active;
@@ -34,297 +36,334 @@ typedef struct
 
 typedef struct
 {
-    Vector2 pos;
-    Vector2 vel;
+    Vector2 position;
+    Vector2 velocity;
     float rotationDeg;
     bool active;
 } Enemy;
 
-// --- Ammo system ---
-int maxBullets = 125, currentBullets = 125;
-bool reloading = false;
-float reloadTime = 2.5f, reloadTime2 = 0.0f;
+// --------------------------------------------------------
+// Constants / Globals (game tuning)
+// --------------------------------------------------------
 
-// tweak as you like
 #define MAX_BULLETS 128
 #define BULLET_SPEED 700.0f
 #define BULLET_LIFE 1.5f
 #define BULLET_W 12.0f
 #define BULLET_H 4.0f
+
 #define MAX_ENEMIES 6
 #define ENEMY_SPEED 175.0f
-#define PLAYER_MAX_HP 3
-#define PLAYER_MAX_HEALTH 3
-int playerHealth = PLAYER_MAX_HEALTH;
-bool playerInvulnerable = false;
-float playerInvulnTime = 1.0f; // seconds of i-frames after hit
-float playerInvulnTimer = 0.0f;
 
-Enemy enemies[MAX_ENEMIES] = {0};
+#define PLAYER_MAX_HEALTH 3
+
+// Ammo system
+int gMaxBullets = 125;
+int gCurrentBullets = 125;
+bool gIsReloading = false;
+float gReloadDuration = 2.5f;
+float gReloadTimer = 0.0f;
+
+// Player health / i-frames
+int gPlayerHealth = PLAYER_MAX_HEALTH;
+bool gPlayerInvulnerable = false;
+float gInvulnDuration = 1.0f;
+float gInvulnTimer = 0.0f;
+
+// Enemies array
+Enemy gEnemies[MAX_ENEMIES] = {0};
+
+// --------------------------------------------------------
+// Helpers
+// --------------------------------------------------------
+
+void ResetEntities(Bullet bullets[], Enemy enemies[])
+{
+    for (int i = 0; i < MAX_BULLETS; i++)
+        bullets[i].active = false;
+
+    for (int i = 0; i < MAX_ENEMIES; i++)
+        enemies[i].active = false;
+}
+
+// --------------------------------------------------------
+// Main
+// --------------------------------------------------------
 
 int main(void)
 {
-    // Initialization
-    //--------------------------------------------------------------------------------------
     const int screenWidth = 1600;
     const int screenHeight = 900;
 
-    InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
-    SetExitKey(KEY_NULL); // from first code: disable ESC auto-exit
-    SetTargetFPS(60);     // Set our game to run at 60 frames-per-second
-    //--------------------------------------------------------------------------------------
+    InitWindow(screenWidth, screenHeight, "ALIEN RAID");
+    SetExitKey(KEY_NULL);
+    SetTargetFPS(60);
 
-    GameState state = STATE_MENU;
-    int menuIndex = 0; // 0 = "Start", 1 = "Quit"
-    int selectedplayers = 0;
+    // ----- Game state -----
+    GameState gameState = STATE_MENU;
+    int menuSelection = 0; // 0 = start, 1 = quit
+    int selectedPlayerIndex = 0;
     bool playerConfirmed = false;
     bool gameStarted = false;
 
-    // Countdown variables
+    // Countdown
     bool countdownActive = false;
-    float countdown = 3.0f;
+    float countdownValue = 3.0f;
     double countdownStartTime = 0.0;
 
-    // === Timer variables (changed to double for precision) ===
-    double gameTimer = 300.0; // 5 minutes = 300 seconds
+    // Timer (5 minutes)
+    double gameTimer = 300.0;
     bool timerActive = false;
 
-    const char *names[3] = {"CEDRIC", "AMIEL", "IAN"};
-    int positions[3] = {400, 700, 1000};
-    Texture2D Enemy = LoadTexture("assets/enemy.png");
-    Texture2D PlayerImages[3];
-    PlayerImages[0] = LoadTexture("assets/ced.png");
-    PlayerImages[1] = LoadTexture("assets/amiel.png");
-    PlayerImages[2] = LoadTexture("assets/ian.png");
+    // ----- Assets -----
+    const char *playerNames[3] = {"CEDRIC", "AMIEL", "IAN"};
+    int selectPositions[3] = {400, 700, 1000};
 
-    Texture2D PlayerIngameImage[3];
-    PlayerIngameImage[0] = LoadTexture("assets/ced_top.png");
-    PlayerIngameImage[1] = LoadTexture("assets/amiel_top.png");
-    PlayerIngameImage[2] = LoadTexture("assets/ian_top.png");
+    Texture2D enemyTexture = LoadTexture("assets/enemy.png");
+
+    Texture2D playerPortraits[3];
+    playerPortraits[0] = LoadTexture("assets/ced.png");
+    playerPortraits[1] = LoadTexture("assets/amiel.png");
+    playerPortraits[2] = LoadTexture("assets/ian.png");
+
+    Texture2D playerTopDown[3];
+    playerTopDown[0] = LoadTexture("assets/ced_top.png");
+    playerTopDown[1] = LoadTexture("assets/amiel_top.png");
+    playerTopDown[2] = LoadTexture("assets/ian_top.png");
+
+    Texture2D backgroundTexture = LoadTexture("assets/bgver2.png");
 
     InitAudioDevice();
-    Sound Confirm = LoadSound("assets/Confirm.wav");
-    Sound Select = LoadSound("assets/Select.wav");
-    Sound Countdown = LoadSound("assets/Countdown.wav");
-    Sound Reload = LoadSound("assets/reload.wav");
-    Sound Shooting = LoadSound("assets/Shooting.wav");
-    Sound Lose = LoadSound("assets/lose.wav");
-    Sound Ingame = LoadSound("assets/ingame.wav");
-    Sound Damaged = LoadSound("assets/damaged.wav");
-    Sound Enemies_Death = LoadSound("assets/edead.wav");
-    Sound Game_Music = LoadSound("assets/Intro music.wav");
-    PlaySound(Game_Music);
+    Sound sConfirm = LoadSound("assets/Confirm.wav");
+    Sound sSelect = LoadSound("assets/Select.wav");
+    Sound sCountdown = LoadSound("assets/Countdown.wav");
+    Sound sReload = LoadSound("assets/reload.wav");
+    Sound sShoot = LoadSound("assets/Shooting.wav");
+    Sound sLose = LoadSound("assets/lose.wav");
+    Sound sIngame = LoadSound("assets/ingame.wav");
+    Sound sDamaged = LoadSound("assets/damaged.wav");
+    Sound sEnemyDeath = LoadSound("assets/edead.wav");
+    Sound sIntroMusic = LoadSound("assets/Intro music.wav");
 
+    PlaySound(sIntroMusic);
 
-    Texture2D Background = LoadTexture("assets/bgver2.png");
-
-    Character player;
+    // ----- Player / bullets -----
+    Player player = {0};
     bool playerInitialized = false;
-    Bullet bullets[MAX_BULLETS] = {0};
-    // --- Shooting delay variables ---
-    float fireCooldown = 0.0f;      // counts down until we can shoot again
-    const float FIRE_DELAY = 0.20f; // seconds between shots (change for faster/slower fire)
 
-    // Main game loop
-    while (!WindowShouldClose()) // Detect window close button or ESC key
+    Bullet bullets[MAX_BULLETS] = {0};
+
+    float fireCooldown = 0.0f;
+    const float FIRE_DELAY = 0.20f;
+
+    // ----------------------------------------------------
+    // Main loop
+    // ----------------------------------------------------
+    while (!WindowShouldClose())
     {
-        // =========================
-        // UPDATE
-        // =========================
-        if (state == STATE_MENU)
+        // ========================= UPDATE =========================
+        if (gameState == STATE_MENU)
         {
-            // --- Keyboard (2-item menu like original) ---
+            // Keyboard navigation
             if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
             {
-                if (menuIndex != 1)
+                if (menuSelection != 1)
                 {
-                    menuIndex = 1;
-                    PlaySound(Select);
+                    menuSelection = 1;
+                    PlaySound(sSelect);
                 }
             }
-
             if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
             {
-                if (menuIndex != 0)
+                if (menuSelection != 0)
                 {
-                    menuIndex = 0;
-                    PlaySound(Select);
+                    menuSelection = 0;
+                    PlaySound(sSelect);
                 }
             }
 
-            // --- Mouse setup: recompute centered positions like in DRAW (from first code) ---
-            int rw = GetRenderWidth();
-            int rh = GetRenderHeight();
+            // Compute button rects
+            int renderWidth = GetRenderWidth();
+            int renderHeight = GetRenderHeight();
             int fontSize = 40;
+            const int padX = 24, padY = 10;
 
             int startWidth = MeasureText("START GAME", fontSize);
-            int StartX = (rw - startWidth) / 2;
-            int StartY = rh / 2;
+            int startX = (renderWidth - startWidth) / 2;
+            int startY = renderHeight / 2;
 
             int quitWidth = MeasureText("QUIT GAME", fontSize);
-            int quitX = (rw - quitWidth) / 2;
-            int quitY = StartY + 60;
+            int quitX = (renderWidth - quitWidth) / 2;
+            int quitY = startY + 60;
 
-            const int padX = 24, padY = 10;
-            Rectangle btnStart = (Rectangle){StartX - padX, StartY - padY, startWidth + 2 * padX, fontSize + 2 * padY};
-            Rectangle btnQuit = (Rectangle){quitX - padX, quitY - padY, quitWidth + 2 * padX, fontSize + 2 * padY};
+            Rectangle btnStart = {startX - padX, startY - padY,
+                                  startWidth + 2 * padX, fontSize + 2 * padY};
+            Rectangle btnQuit = {quitX - padX, quitY - padY,
+                                 quitWidth + 2 * padX, fontSize + 2 * padY};
 
-            Vector2 m = GetMousePosition();
-            bool hoverStart = CheckCollisionPointRec(m, btnStart);
-            bool hoverQuit = CheckCollisionPointRec(m, btnQuit);
+            Vector2 mouse = GetMousePosition();
+            bool hoverStart = CheckCollisionPointRec(mouse, btnStart);
+            bool hoverQuit = CheckCollisionPointRec(mouse, btnQuit);
 
             if (hoverStart)
-                menuIndex = 0;
+                menuSelection = 0;
             if (hoverQuit)
-                menuIndex = 1;
+                menuSelection = 1;
 
-            // --- Activate (keyboard) ---
+            // Enter key
             if (IsKeyPressed(KEY_ENTER))
             {
-                if (menuIndex == 0)
+                if (menuSelection == 0)
                 {
-                    state = STATE_GAME;
-                    // reset game flow state on entering GAME
+                    gameState = STATE_GAME;
                     playerConfirmed = false;
                     gameStarted = false;
                     countdownActive = false;
-                    countdown = 3.0f;
+                    countdownValue = 3.0f;
                     playerInitialized = false;
-                    currentBullets = maxBullets;
-                    reloading = false;
-                    // reset timer when entering game-selection screen
+                    gCurrentBullets = gMaxBullets;
+                    gIsReloading = false;
                     gameTimer = 300.0;
                     timerActive = false;
-                    playerHealth = PLAYER_MAX_HEALTH;
-                    playerInvulnerable = false;
-                    playerInvulnTimer = 0.0f;
+                    gPlayerHealth = PLAYER_MAX_HEALTH;
+                    gPlayerInvulnerable = false;
+                    gInvulnTimer = 0.0f;
+                    ResetEntities(bullets, gEnemies);
 
-                    PlaySound(Confirm);
+                    PlaySound(sConfirm);
                     WaitTime(0.15f);
                 }
-                else if (menuIndex == 1)
+                else if (menuSelection == 1)
                 {
-                    break; // quit
+                    break;
                 }
             }
 
-            // --- Activate (mouse) ---
+            // Mouse click start
             if (hoverStart && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
-                state = STATE_GAME;
+                gameState = STATE_GAME;
                 playerConfirmed = false;
                 gameStarted = false;
                 countdownActive = false;
-                countdown = 3.0f;
+                countdownValue = 3.0f;
                 playerInitialized = false;
-                currentBullets = maxBullets;
-                reloading = false;
+                gCurrentBullets = gMaxBullets;
+                gIsReloading = false;
                 gameTimer = 300.0;
                 timerActive = false;
-                PlaySound(Confirm);
+                gPlayerHealth = PLAYER_MAX_HEALTH;
+                gPlayerInvulnerable = false;
+                gInvulnTimer = 0.0f;
+                ResetEntities(bullets, gEnemies);
+                PlaySound(sConfirm);
             }
+
             if (hoverQuit && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
                 break;
             }
         }
-        else if (state == STATE_GAME)
+        else if (gameState == STATE_GAME)
         {
+            // ESC -> back to menu
             if (IsKeyPressed(KEY_ESCAPE))
             {
-                state = STATE_MENU;
+                gameState = STATE_MENU;
                 playerConfirmed = false;
                 gameStarted = false;
                 countdownActive = false;
-                countdown = 3.0f;
+                countdownValue = 3.0f;
                 playerInitialized = false;
-                currentBullets = maxBullets;
-                reloading = false;
-                timerActive = false; // stop timer
-                playerHealth = PLAYER_MAX_HEALTH;
-                playerInvulnerable = false;
-                playerInvulnTimer = 0.0f;
-                PlaySound(Confirm);
-                if (IsSoundPlaying(Ingame))
-                    StopSound(Ingame);
-                    if (!IsSoundPlaying(Game_Music))
-                    PlaySound(Game_Music);
+                gCurrentBullets = gMaxBullets;
+                gIsReloading = false;
+                timerActive = false;
+                gPlayerHealth = PLAYER_MAX_HEALTH;
+                gPlayerInvulnerable = false;
+                gInvulnTimer = 0.0f;
+                ResetEntities(bullets, gEnemies);
+                PlaySound(sConfirm);
+
+                if (IsSoundPlaying(sIngame))
+                    StopSound(sIngame);
+                if (!IsSoundPlaying(sIntroMusic))
+                    PlaySound(sIntroMusic);
             }
 
+            // ----- Character selection phase -----
             if (!playerConfirmed)
             {
                 if (IsKeyPressed(KEY_RIGHT))
                 {
-                    selectedplayers = (selectedplayers + 1) % 3;
-                    PlaySound(Select);
+                    selectedPlayerIndex = (selectedPlayerIndex + 1) % 3;
+                    PlaySound(sSelect);
                 }
                 if (IsKeyPressed(KEY_LEFT))
                 {
-                    selectedplayers = (selectedplayers - 1 + 3) % 3;
-                    PlaySound(Select);
+                    selectedPlayerIndex = (selectedPlayerIndex - 1 + 3) % 3;
+                    PlaySound(sSelect);
                 }
-
                 if (IsKeyPressed(KEY_ENTER))
                 {
                     playerConfirmed = true;
-                    PlaySound(Confirm);
+                    PlaySound(sConfirm);
                 }
             }
             else if (playerConfirmed && !gameStarted)
             {
-                // When player presses ENTER again, switch to countdown screen
                 if (IsKeyPressed(KEY_ENTER))
                 {
-                    state = STATE_COUNTDOWN;
+                    gameState = STATE_COUNTDOWN;
                     countdownActive = true;
                     countdownStartTime = GetTime();
-                    PlaySound(Confirm);
-                    PlaySound(Countdown);
-                    StopSound(Game_Music);
+                    PlaySound(sConfirm);
+                    PlaySound(sCountdown);
+                    StopSound(sIntroMusic);
                 }
             }
 
-            // --- Live gameplay (only when game started and player is ready) ---
+            // ----- Actual gameplay -----
             if (gameStarted && playerInitialized)
             {
-                float dt = GetFrameTime(); // get time since last frame
+                float dt = GetFrameTime();
 
-                if (playerInvulnerable)
-            {
-                playerInvulnTimer -= dt;
-                if (playerInvulnTimer <= 0.0f)
-            {
-                playerInvulnerable = false;
-            }
-        }
-
-        // --- update fire cooldown ---
-        if (fireCooldown > 0.0f)
-            fireCooldown -= dt;
-
-        // === update game timer if active ===
-         if (timerActive)
-        {
-            gameTimer -= dt; // substract 1 second per second
-            if (gameTimer <= 0.0)
-            {
-                gameTimer = 0.0;
-                timerActive = false;
-                state = STATE_GAMEOVER; // back to gameover when the timer runs out
-                playerConfirmed = false;
-                gameStarted = false;
-                countdownActive = false;
-                playerInitialized = false;
-                currentBullets = maxBullets;
-                reloading = false;
-                playerHealth = PLAYER_MAX_HEALTH;
-                playerInvulnerable = false;
-                playerInvulnTimer = 0.0f;
+                // Invulnerability timer
+                if (gPlayerInvulnerable)
+                {
+                    gInvulnTimer -= dt;
+                    if (gInvulnTimer <= 0.0f)
+                        gPlayerInvulnerable = false;
                 }
-            }
 
-                // movement input
-                Vector2 move = (Vector2){0, 0};
+                // Fire cooldown
+                if (fireCooldown > 0.0f)
+                    fireCooldown -= dt;
+
+                // Game timer
+                if (timerActive)
+                {
+                    gameTimer -= dt;
+                    if (gameTimer <= 0.0)
+                    {
+                        gameTimer = 0.0;
+                        timerActive = false;
+
+                        gameState = STATE_GAMEOVER;
+                        playerConfirmed = false;
+                        gameStarted = false;
+                        countdownActive = false;
+                        playerInitialized = false;
+                        gCurrentBullets = gMaxBullets;
+                        gIsReloading = false;
+                        gPlayerHealth = PLAYER_MAX_HEALTH;
+                        gPlayerInvulnerable = false;
+                        gInvulnTimer = 0.0f;
+                        ResetEntities(bullets, gEnemies);
+                    }
+                }
+
+                // Movement input
+                Vector2 move = {0.0f, 0.0f};
                 if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
                     move.x -= 1.0f;
                 if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))
@@ -341,124 +380,139 @@ int main(void)
                     move.y /= len;
                 }
 
-                player.pos.x += move.x * player.speed * dt;
-                player.pos.y += move.y * player.speed * dt;
+                player.position.x += move.x * player.speed * dt;
+                player.position.y += move.y * player.speed * dt;
 
-                // size once; reuse
-                float pw = player.tex.width * player.scale;
-                float ph = player.tex.height * player.scale;
+                // Player size & clamp
+                float pw = player.texture.width * player.scale;
+                float ph = player.texture.height * player.scale;
 
-                // clamp inside window
-                if (player.pos.x < 0)
-                    player.pos.x = 0;
-                if (player.pos.y < 0)
-                    player.pos.y = 0;
-                if (player.pos.x > screenWidth - pw)
-                    player.pos.x = screenWidth - pw;
-                if (player.pos.y > screenHeight - ph)
-                    player.pos.y = screenHeight - ph;
+                if (player.position.x < 0)
+                    player.position.x = 0;
+                if (player.position.y < 0)
+                    player.position.y = 0;
+                if (player.position.x > screenWidth - pw)
+                    player.position.x = screenWidth - pw;
+                if (player.position.y > screenHeight - ph)
+                    player.position.y = screenHeight - ph;
 
-                float hitScale = 0.5f; // adjust between 0.5–1.0 (smaller = easier)
+                // Player hitbox (smaller than sprite)
+                float hitScale = 0.5f;
                 float shrinkX = pw * (1.0f - hitScale) * 0.5f;
                 float shrinkY = ph * (1.0f - hitScale) * 0.5f;
-                Rectangle playerRect = {
-                    player.pos.x + shrinkX,
-                    player.pos.y + shrinkY,
+
+                Rectangle playerHitbox = {
+                    player.position.x + shrinkX,
+                    player.position.y + shrinkY,
                     pw * hitScale,
                     ph * hitScale};
 
-                // --- AIM: rotate player to face mouse ---
+                // Aim at mouse
                 Vector2 mouse = GetMousePosition();
-                Vector2 center = (Vector2){player.pos.x + pw * 0.5f, player.pos.y + ph * 0.5f};
-                Vector2 dir = (Vector2){mouse.x - center.x, mouse.y - center.y};
-                float dlen = sqrtf(dir.x * dir.x + dir.y * dir.y);
-                if (dlen > 0.0001f)
+                Vector2 playerCenter = {
+                    player.position.x + pw * 0.5f,
+                    player.position.y + ph * 0.5f};
+
+                Vector2 aimDir = {mouse.x - playerCenter.x, mouse.y - playerCenter.y};
+                float aimLen = sqrtf(aimDir.x * aimDir.x + aimDir.y * aimDir.y);
+                if (aimLen > 0.0001f)
                 {
-                    dir.x /= dlen;
-                    dir.y /= dlen;
+                    aimDir.x /= aimLen;
+                    aimDir.y /= aimLen;
                 }
 
-                player.rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI) - 90.0f;
+                player.rotationDeg = atan2f(aimDir.y, aimDir.x) * (180.0f / PI) - 90.0f;
 
-                // --- SHOOT bullets ---
+                // Shooting
                 if ((IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonDown(MOUSE_LEFT_BUTTON)) &&
-                    fireCooldown <= 0.0f && !reloading && currentBullets > 0)
+                    fireCooldown <= 0.0f && !gIsReloading && gCurrentBullets > 0)
                 {
-                    PlaySound(Shooting);
+                    PlaySound(sShoot);
+
                     for (int i = 0; i < MAX_BULLETS; i++)
                     {
                         if (!bullets[i].active)
                         {
                             float muzzleDist = fmaxf(pw, ph) * 0.5f;
-                            Vector2 spawn = (Vector2){center.x + dir.x * muzzleDist, center.y + dir.y * muzzleDist};
+                            Vector2 spawn = {
+                                playerCenter.x + aimDir.x * muzzleDist,
+                                playerCenter.y + aimDir.y * muzzleDist};
 
-                            bullets[i].pos = spawn;
-                            bullets[i].vel = (Vector2){dir.x * BULLET_SPEED, dir.y * BULLET_SPEED};
-                            bullets[i].rotationDeg = atan2f(dir.y, dir.x) * (180.0f / PI);
+                            bullets[i].position = spawn;
+                            bullets[i].velocity = (Vector2){aimDir.x * BULLET_SPEED, aimDir.y * BULLET_SPEED};
+                            bullets[i].rotationDeg = atan2f(aimDir.y, aimDir.x) * (180.0f / PI);
                             bullets[i].life = BULLET_LIFE;
                             bullets[i].active = true;
 
                             fireCooldown = FIRE_DELAY;
-                            currentBullets--; // consume one bullet
+                            gCurrentBullets--;
                             break;
                         }
                     }
                 }
 
-                // --- UPDATE bullets ---
+                // Update bullets
                 for (int i = 0; i < MAX_BULLETS; i++)
                 {
                     if (!bullets[i].active)
                         continue;
-                    bullets[i].pos.x += bullets[i].vel.x * dt;
-                    bullets[i].pos.y += bullets[i].vel.y * dt;
+
+                    bullets[i].position.x += bullets[i].velocity.x * dt;
+                    bullets[i].position.y += bullets[i].velocity.y * dt;
                     bullets[i].life -= dt;
 
                     if (bullets[i].life <= 0.0f ||
-                        bullets[i].pos.x < -50 || bullets[i].pos.x > screenWidth + 50 ||
-                        bullets[i].pos.y < -50 || bullets[i].pos.y > screenHeight + 50)
+                        bullets[i].position.x < -50 || bullets[i].position.x > screenWidth + 50 ||
+                        bullets[i].position.y < -50 || bullets[i].position.y > screenHeight + 50)
                     {
                         bullets[i].active = false;
                     }
                 }
-                // Spawn multiple enemies at once
+
+                // Spawn enemies
                 int enemiesToSpawn = GetRandomValue(1, 2);
                 for (int e = 0; e < enemiesToSpawn; e++)
                 {
                     for (int i = 0; i < MAX_ENEMIES; i++)
                     {
-                        if (!enemies[i].active)
+                        if (!gEnemies[i].active)
                         {
                             int corner = GetRandomValue(0, 3);
                             switch (corner)
                             {
                             case 0:
-                                enemies[i].pos = (Vector2){0, 0};
+                                gEnemies[i].position = (Vector2){0, 0};
                                 break;
                             case 1:
-                                enemies[i].pos = (Vector2){screenWidth - 40, 0};
+                                gEnemies[i].position = (Vector2){screenWidth - 40, 0};
                                 break;
                             case 2:
-                                enemies[i].pos = (Vector2){0, screenHeight - 40};
+                                gEnemies[i].position = (Vector2){0, screenHeight - 40};
                                 break;
                             case 3:
-                                enemies[i].pos = (Vector2){screenWidth - 40, screenHeight - 40};
+                                gEnemies[i].position = (Vector2){screenWidth - 40, screenHeight - 40};
                                 break;
                             }
-                            enemies[i].active = true;
-                            break; // go to next enemy slot
+                            gEnemies[i].active = true;
+                            break;
                         }
                     }
                 }
 
                 // Move enemies toward player
+                float enemyScale = 0.2f;
+                float enemyW = enemyTexture.width * enemyScale;
+                float enemyH = enemyTexture.height * enemyScale;
+
                 for (int i = 0; i < MAX_ENEMIES; i++)
                 {
-                    if (!enemies[i].active)
+                    if (!gEnemies[i].active)
                         continue;
+
                     Vector2 dir = {
-                        (player.pos.x + player.tex.width * player.scale / 2) - enemies[i].pos.x,
-                        (player.pos.y + player.tex.height * player.scale / 2) - enemies[i].pos.y};
+                        playerCenter.x - gEnemies[i].position.x,
+                        playerCenter.y - gEnemies[i].position.y};
+
                     float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
                     if (len > 0)
                     {
@@ -466,352 +520,342 @@ int main(void)
                         dir.y /= len;
                     }
 
-                    enemies[i].pos.x += dir.x * ENEMY_SPEED * dt;
-                    enemies[i].pos.y += dir.y * ENEMY_SPEED * dt;
-                    enemies[i].rotationDeg = atan2f(dir.y, dir.x) * RAD2DEG + 90.0f;
+                    gEnemies[i].position.x += dir.x * ENEMY_SPEED * dt;
+                    gEnemies[i].position.y += dir.y * ENEMY_SPEED * dt;
+                    gEnemies[i].rotationDeg = atan2f(dir.y, dir.x) * RAD2DEG + 90.0f;
                 }
 
-                // --- Enemy hits player ---
+                // Enemy hits player
                 for (int i = 0; i < MAX_ENEMIES; i++)
                 {
-                    if (!enemies[i].active)
+                    if (!gEnemies[i].active)
                         continue;
 
-                    float enemyScale = 0.2f;
-                    float enemyW = Enemy.width * enemyScale;
-                    float enemyH = Enemy.height * enemyScale;
-
-                    Rectangle enemyRect = {
-                        enemies[i].pos.x - enemyW * 0.5f,
-                        enemies[i].pos.y - enemyH * 0.5f,
+                    Rectangle enemyHitbox = {
+                        gEnemies[i].position.x - enemyW * 0.5f,
+                        gEnemies[i].position.y - enemyH * 0.5f,
                         enemyW,
                         enemyH};
 
-                    if (!playerInvulnerable && CheckCollisionRecs(playerRect, enemyRect))
+                    if (!gPlayerInvulnerable && CheckCollisionRecs(playerHitbox, enemyHitbox))
                     {
-                        // enemy touched player -> damage
-                        PlaySound(Damaged);
-                        playerHealth--;
-                        playerInvulnerable = true;
-                        playerInvulnTimer = playerInvulnTime;
+                        PlaySound(sDamaged);
+                        gPlayerHealth--;
+                        gPlayerInvulnerable = true;
+                        gInvulnTimer = gInvulnDuration;
 
-                        enemies[i].active = false;
+                        gEnemies[i].active = false;
 
-                        // check death
-                        if (playerHealth <= 0)
+                        if (gPlayerHealth <= 0)
                         {
-                            // simple game-over: back to menu & reset (you can later make a real screen)
-                            state = STATE_GAMEOVER;
+                            gameState = STATE_GAMEOVER;
                             playerConfirmed = false;
                             gameStarted = false;
                             countdownActive = false;
                             playerInitialized = false;
-                            currentBullets = maxBullets;
-                            reloading = false;
+                            gCurrentBullets = gMaxBullets;
+                            gIsReloading = false;
                             timerActive = false;
-                            playerHealth = PLAYER_MAX_HEALTH;
-                            PlaySound(Lose);
-                            StopSound(Ingame);
+                            gPlayerHealth = PLAYER_MAX_HEALTH;
+                            PlaySound(sLose);
+                            StopSound(sIngame);
                         }
                     }
                 }
 
-                // --- Bullet vs Enemy collision ---
-                float enemyScale = 0.2f;
-                float enemyW = Enemy.width * enemyScale;
-                float enemyH = Enemy.height * enemyScale;
-
+                // Bullet vs enemy
                 for (int i = 0; i < MAX_BULLETS; i++)
                 {
                     if (!bullets[i].active)
                         continue;
 
-                    // bullet hitbox (centered)
                     Rectangle bulletRect = {
-                        bullets[i].pos.x - BULLET_W * 0.5f,
-                        bullets[i].pos.y - BULLET_H * 0.5f,
+                        bullets[i].position.x - BULLET_W * 0.5f,
+                        bullets[i].position.y - BULLET_H * 0.5f,
                         BULLET_W,
                         BULLET_H};
 
                     for (int j = 0; j < MAX_ENEMIES; j++)
                     {
-                        if (!enemies[j].active)
+                        if (!gEnemies[j].active)
                             continue;
 
-                        // enemy hitbox (centered)
-                        Rectangle enemyRect = {
-                            enemies[j].pos.x - enemyW * 0.5f,
-                            enemies[j].pos.y - enemyH * 0.5f,
+                        Rectangle enemyHitbox = {
+                            gEnemies[j].position.x - enemyW * 0.5f,
+                            gEnemies[j].position.y - enemyH * 0.5f,
                             enemyW,
                             enemyH};
 
-                        if (CheckCollisionRecs(bulletRect, enemyRect))
+                        if (CheckCollisionRecs(bulletRect, enemyHitbox))
                         {
-                            // 💥 Collision detected!
-                            PlaySound(Enemies_Death);
-                            enemies[j].active = false; // enemy dies
-                            bullets[i].active = false; // bullet disappears
-                            break;                     // stop checking this bullet
+                            PlaySound(sEnemyDeath);
+                            gEnemies[j].active = false;
+                            bullets[i].active = false;
+                            break;
                         }
                     }
                 }
 
-                // Reload bullets ---
-                if (reloading)
+                // Reload
+                if (gIsReloading)
                 {
-                    reloadTime2 -= dt;
-                    if (reloadTime2 <= 0.0f)
+                    gReloadTimer -= dt;
+                    if (gReloadTimer <= 0.0f)
                     {
-                        currentBullets = maxBullets;
-                        reloading = false;
+                        gCurrentBullets = gMaxBullets;
+                        gIsReloading = false;
                     }
                 }
-                else
+                else if (IsKeyPressed(KEY_R) && gCurrentBullets < gMaxBullets)
                 {
-                    if (IsKeyPressed(KEY_R) && currentBullets < maxBullets)
-                    {
-                        PlaySound(Reload);
-                        reloading = true;
-                        reloadTime2 = reloadTime;
-                    }
+                    PlaySound(sReload);
+                    gIsReloading = true;
+                    gReloadTimer = gReloadDuration;
                 }
             }
         }
-
-        else if (state == STATE_COUNTDOWN)
+        else if (gameState == STATE_COUNTDOWN)
         {
             double elapsed = GetTime() - countdownStartTime;
 
             if (elapsed < 1.0)
-                countdown = 3;
+                countdownValue = 3;
             else if (elapsed < 2.0)
-                countdown = 2;
+                countdownValue = 2;
             else if (elapsed < 3.0)
-                countdown = 1;
+                countdownValue = 1;
             else if (elapsed < 4.0)
-                countdown = 0; // show START!
+                countdownValue = 0;
             else
             {
                 countdownActive = false;
                 gameStarted = true;
-                state = STATE_GAME;
+                gameState = STATE_GAME;
 
-                player.tex = PlayerIngameImage[selectedplayers];
+                player.texture = playerTopDown[selectedPlayerIndex];
                 player.rotationDeg = 0.0f;
-                player.scale = 150.0f / player.tex.width;
+                player.scale = 150.0f / player.texture.width;
                 player.speed = 350.0f;
-                player.pos.x = (screenWidth - player.tex.width * player.scale) * 0.5f;
-                player.pos.y = (screenHeight - player.tex.height * player.scale) * 0.6f;
+                player.position.x = (screenWidth - player.texture.width * player.scale) * 0.5f;
+                player.position.y = (screenHeight - player.texture.height * player.scale) * 0.6f;
                 playerInitialized = true;
-                currentBullets = maxBullets;
-                reloading = false;
 
-                // === Start the 5-minute timer (double) ===
+                gCurrentBullets = gMaxBullets;
+                gIsReloading = false;
+
                 gameTimer = 300.0;
                 timerActive = true;
             }
         }
 
-        // =========================
-        // DRAW
-        // =========================
+        // ========================= DRAW =========================
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
-        if (state == STATE_MENU)
+        if (gameState == STATE_MENU)
         {
-            int rw = GetRenderWidth();
-            int rh = GetRenderHeight();
+            int renderWidth = GetRenderWidth();
+            int renderHeight = GetRenderHeight();
 
             int titleSize = 100;
             int titleWidth = MeasureText("ALIEN RAID", titleSize);
-            int titleX = (rw - titleWidth) / 2;
-            DrawText("ALIEN RAID", titleX, rh / 4, titleSize, BLACK);
+            DrawText("ALIEN RAID", (renderWidth - titleWidth) / 2, renderHeight / 4, titleSize, BLACK);
 
             int fontSize = 40;
             const int padX = 24, padY = 10;
 
             int startWidth = MeasureText("START GAME", fontSize);
-            int StartX = (rw - startWidth) / 2;
-            int StartY = rh / 2;
-            Rectangle btnStart = (Rectangle){StartX - padX, StartY - padY, startWidth + 2 * padX, fontSize + 2 * padY};
+            int startX = (renderWidth - startWidth) / 2;
+            int startY = renderHeight / 2;
+            Rectangle btnStart = {startX - padX, startY - padY,
+                                  startWidth + 2 * padX, fontSize + 2 * padY};
 
             int quitWidth = MeasureText("QUIT GAME", fontSize);
-            int quitX = (rw - quitWidth) / 2;
-            int quitY = StartY + 60;
-            Rectangle btnQuit = (Rectangle){quitX - padX, quitY - padY, quitWidth + 2 * padX, fontSize + 2 * padY};
+            int quitX = (renderWidth - quitWidth) / 2;
+            int quitY = startY + 60;
+            Rectangle btnQuit = {quitX - padX, quitY - padY,
+                                 quitWidth + 2 * padX, fontSize + 2 * padY};
 
-            Vector2 m = GetMousePosition();
-            if (CheckCollisionPointRec(m, btnStart))
+            Vector2 mouse = GetMousePosition();
+            if (CheckCollisionPointRec(mouse, btnStart))
                 DrawRectangleRec(btnStart, (Color){220, 220, 220, 255});
-            if (CheckCollisionPointRec(m, btnQuit))
+            if (CheckCollisionPointRec(mouse, btnQuit))
                 DrawRectangleRec(btnQuit, (Color){220, 220, 220, 255});
 
-            Color startcolor = (menuIndex == 0) ? RED : DARKGRAY;
-            Color quitcolor = (menuIndex == 1) ? RED : DARKGRAY;
+            Color startColor = (menuSelection == 0) ? RED : DARKGRAY;
+            Color quitColor = (menuSelection == 1) ? RED : DARKGRAY;
 
-            DrawText("START GAME", StartX, StartY, fontSize, startcolor);
-            DrawText("QUIT GAME", quitX, quitY, fontSize, quitcolor);
+            DrawText("START GAME", startX, startY, fontSize, startColor);
+            DrawText("QUIT GAME", quitX, quitY, fontSize, quitColor);
 
-            int insfontSize = 20;
-            const char *tip = "USE ARROWS UP/DOWN OR MOUSE // PRESS ENTER/CLICK TO SELECT";
-            int instructionsWidth = MeasureText(tip, insfontSize);
-            int insX = (rw - instructionsWidth) / 2;
-            int insY = quitY + 60;
-            DrawText(tip, insX, insY, insfontSize, GRAY);
+            const char *tip = "USE ARROWS / MOUSE // PRESS ENTER / CLICK TO SELECT";
+            int tipSize = 20;
+            int tipWidth = MeasureText(tip, tipSize);
+            DrawText(tip, (renderWidth - tipWidth) / 2, quitY + 60, tipSize, GRAY);
         }
-        else if (state == STATE_GAME)
-
+        else if (gameState == STATE_GAME)
         {
             if (gameStarted)
             {
-                DrawTextureEx(Background, (Vector2){0, 0}, 0.0f, 1.3f, WHITE);
+                DrawTextureEx(backgroundTexture, (Vector2){0, 0}, 0.0f, 1.3f, WHITE);
 
                 if (playerInitialized)
                 {
-                    Rectangle src = (Rectangle){0, 0, player.tex.width, player.tex.height};
-                    Rectangle dst = (Rectangle){
-                        player.pos.x + (player.tex.width * player.scale) * 0.5f,
-                        player.pos.y + (player.tex.height * player.scale) * 0.5f,
-                        player.tex.width * player.scale,
-                        player.tex.height * player.scale};
-                    Vector2 origin = (Vector2){dst.width * 0.5f, dst.height * 0.5f};
+                    Rectangle src = {0, 0, player.texture.width, player.texture.height};
+                    Rectangle dst = {
+                        player.position.x + (player.texture.width * player.scale) * 0.5f,
+                        player.position.y + (player.texture.height * player.scale) * 0.5f,
+                        player.texture.width * player.scale,
+                        player.texture.height * player.scale};
+                    Vector2 origin = {dst.width * 0.5f, dst.height * 0.5f};
 
-                    DrawTexturePro(player.tex, src, dst, origin, player.rotationDeg, WHITE);
-                    // --- Display ammo info ---
-                    if (reloading)
+                    DrawTexturePro(player.texture, src, dst, origin, player.rotationDeg, WHITE);
+
+                    // Ammo display
+                    if (gIsReloading)
                     {
                         DrawText("Reloading...", 50, 50, 30, RED);
                     }
                     else
                     {
-                        DrawText(TextFormat("Bullets: %d / %d", currentBullets, maxBullets), 50, 50, 30, DARKBLUE);
-                        if (currentBullets == 0)
+                        DrawText(TextFormat("Bullets: %d / %d", gCurrentBullets, gMaxBullets),
+                                 50, 50, 30, DARKBLUE);
+                        if (gCurrentBullets == 0)
                             DrawText("Out of bullets! Press R to reload!", 50, 90, 20, GRAY);
                     }
-                    // --- time remaining ---
-                    {
-                        int minutes = (int)(gameTimer / 60.0);
-                        int seconds = (int)fmod(gameTimer, 60.0);
-                        char timeremaining[32];
-                        sprintf(timeremaining, "Time remaining: %02d:%02d", minutes, seconds);
-                        int tw = MeasureText(timeremaining, 30);
-                        DrawText(timeremaining, screenWidth - tw - 20, 40, 30, DARKGREEN);
-                    }
-                }
-                else
-                {
-                    DrawText("Loading player...", 630, 400, 30, RED);
+
+                    // Time remaining
+                    int minutes = (int)(gameTimer / 60.0);
+                    int seconds = (int)fmod(gameTimer, 60.0);
+                    char timeStr[32];
+                    sprintf(timeStr, "Time remaining: %02d:%02d", minutes, seconds);
+                    int tw = MeasureText(timeStr, 30);
+                    DrawText(timeStr, screenWidth - tw - 20, 40, 30, DARKGREEN);
                 }
 
-                // --- draw bullets ---
+                // Bullets
                 for (int i = 0; i < MAX_BULLETS; i++)
                 {
                     if (!bullets[i].active)
                         continue;
-
-                    Rectangle bdst = (Rectangle){bullets[i].pos.x, bullets[i].pos.y, BULLET_W, BULLET_H};
-                    Vector2 borg = (Vector2){BULLET_W * 0.5f, BULLET_H * 0.5f};
-                    DrawRectanglePro(bdst, borg, bullets[i].rotationDeg, BLUE);
+                    Rectangle rect = {bullets[i].position.x, bullets[i].position.y, BULLET_W, BULLET_H};
+                    Vector2 org = {BULLET_W * 0.5f, BULLET_H * 0.5f};
+                    DrawRectanglePro(rect, org, bullets[i].rotationDeg, BLUE);
                 }
-                // Draw enemies
+
+                // Enemies
+                float enemyScale = 0.2f;
                 for (int i = 0; i < MAX_ENEMIES; i++)
                 {
-                    if (!enemies[i].active)
+                    if (!gEnemies[i].active)
                         continue;
-                    float scale = 0.2f;
-                    Vector2 origin = {Enemy.width * scale / 2, Enemy.height * scale / 2};
-                    DrawTexturePro(Enemy,
-                                   (Rectangle){0, 0, Enemy.width, Enemy.height},
-                                   (Rectangle){enemies[i].pos.x, enemies[i].pos.y, Enemy.width * scale, Enemy.height * scale}, origin, enemies[i].rotationDeg, WHITE);
+                    Vector2 origin = {enemyTexture.width * enemyScale / 2,
+                                      enemyTexture.height * enemyScale / 2};
+                    Rectangle src = {0, 0, enemyTexture.width, enemyTexture.height};
+                    Rectangle dst = {
+                        gEnemies[i].position.x,
+                        gEnemies[i].position.y,
+                        enemyTexture.width * enemyScale,
+                        enemyTexture.height * enemyScale};
+                    DrawTexturePro(enemyTexture, src, dst, origin, gEnemies[i].rotationDeg, WHITE);
                 }
-                // --- Draw health ---
+
+                // Health
                 for (int i = 0; i < PLAYER_MAX_HEALTH; i++)
                 {
-                    Color c = (i < playerHealth) ? RED : (Color){150, 150, 150, 255};
-                    DrawRectangle(50 + i * 30, 100, 20, 20, c); // simple squares as hearts
-                    DrawText("<3",  50 + i * 30 - 2, 98, 20, RAYWHITE);
+                    Color c = (i < gPlayerHealth) ? RED : (Color){150, 150, 150, 255};
+                    DrawRectangle(50 + i * 30, 100, 20, 20, c);
+                    DrawText("<3", 50 + i * 30 - 2, 98, 20, RAYWHITE);
                 }
-                EndDrawing();
-                continue;
-            }
-
-            DrawText("GAME RUNNING!", 610, 100, 40, DARKBLUE);
-            DrawText("Press ESC to return to menu", 620, 160, 20, GRAY);
-
-            for (int i = 0; i < 3; i++)
-            {
-                Color color = (i == selectedplayers) ? RED : DARKBLUE;
-                float scale = 150.0f / PlayerImages[i].width * 0.8f;
-                DrawTextureEx(PlayerImages[i], (Vector2){positions[i] + 10, 290}, 0.0f, scale, WHITE);
-                DrawRectangleLines(positions[i], 300, 150, 150, color);
-                int textWidth = MeasureText(names[i], 40);
-                DrawText(names[i], positions[i] + 75 - textWidth / 2, 460, 40, color);
-            }
-
-            if (playerConfirmed && !gameStarted)
-            {
-                DrawText(TextFormat("You chose: %s", names[selectedplayers]), 620, 600, 30, BLACK);
-                DrawText("Press ENTER again to start", 620, 640, 20, GRAY);
-            }
-        }
-        else if (state == STATE_COUNTDOWN)
-        {
-            ClearBackground(WHITE);
-
-            char countdownText[10];
-            if (countdown > 0)
-            {
-             sprintf(countdownText, "%d", (int)countdown);
             }
             else
             {
-                sprintf(countdownText, "START!");
-                PlaySound(Ingame);
+                DrawText("GAME RUNNING!", 610, 100, 40, DARKBLUE);
+                DrawText("Press ESC to return to menu", 620, 160, 20, GRAY);
+
+                for (int i = 0; i < 3; i++)
+                {
+                    Color color = (i == selectedPlayerIndex) ? RED : DARKBLUE;
+                    float scale = 150.0f / playerPortraits[i].width * 0.8f;
+
+                    DrawTextureEx(playerPortraits[i],
+                                  (Vector2){selectPositions[i] + 10, 290},
+                                  0.0f, scale, WHITE);
+                    DrawRectangleLines(selectPositions[i], 300, 150, 150, color);
+
+                    int nameW = MeasureText(playerNames[i], 40);
+                    DrawText(playerNames[i],
+                             selectPositions[i] + 75 - nameW / 2,
+                             460, 40, color);
+                }
+
+                if (playerConfirmed)
+                {
+                    DrawText(TextFormat("You chose: %s", playerNames[selectedPlayerIndex]),
+                             620, 600, 30, BLACK);
+                    DrawText("Press ENTER again to start", 620, 640, 20, GRAY);
+                }
+            }
+        }
+        else if (gameState == STATE_COUNTDOWN)
+        {
+            ClearBackground(WHITE);
+
+            char text[16];
+            if (countdownValue > 0)
+                sprintf(text, "%d", (int)countdownValue);
+            else
+            {
+                sprintf(text, "START!");
+                PlaySound(sIngame);
             }
 
             int fontSize = 150;
-            int textWidth = MeasureText(countdownText, fontSize);
-            int textX = (GetScreenWidth() - textWidth) / 2;
-            int textY = (GetScreenHeight() - fontSize) / 2;
-
-            DrawText(countdownText, textX, textY, fontSize, RED);
+            int tw = MeasureText(text, fontSize);
+            DrawText(text,
+                     (screenWidth - tw) / 2,
+                     (screenHeight - fontSize) / 2,
+                     fontSize, RED);
         }
-        else if (state == STATE_GAMEOVER)
+        else if (gameState == STATE_GAMEOVER)
         {
             ClearBackground(WHITE);
-            const char *text = "GAME OVER";
-            int fontSize = 120;
-            int tw = MeasureText(text, fontSize);
-            DrawText(text, (screenWidth - tw) / 2, screenHeight / 3, fontSize, RED);
 
-            // Next button
+            const char *title = "GAME OVER";
+            int fontSize = 120;
+            int tw = MeasureText(title, fontSize);
+            DrawText(title, (screenWidth - tw) / 2, screenHeight / 3, fontSize, RED);
+
             const char *nextText = "NEXT";
             int nextSize = 50;
             int nextW = MeasureText(nextText, nextSize);
-            Rectangle nextBtn = {(float)(screenWidth - nextW) / 2 - 20, (float)(screenHeight / 2) + 100, (float)nextW + 40, 80};
+            Rectangle nextBtn = {
+                (float)(screenWidth - nextW) / 2 - 20,
+                (float)(screenHeight / 2) + 100,
+                (float)nextW + 40,
+                80};
 
-            Vector2 m = GetMousePosition();
-            bool hoverNext = CheckCollisionPointRec(m, nextBtn);
+            Vector2 mouse = GetMousePosition();
+            bool hover = CheckCollisionPointRec(mouse, nextBtn);
 
-            DrawRectangleRec(nextBtn, hoverNext ? DARKGRAY : GRAY);
+            DrawRectangleRec(nextBtn, hover ? DARKGRAY : GRAY);
             DrawText(nextText, nextBtn.x + 20, nextBtn.y + 15, nextSize, WHITE);
 
-            if (hoverNext && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+            if (hover && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
-                state = STATE_SCORE;
-                PlaySound(Confirm);
+                gameState = STATE_SCORE;
+                PlaySound(sConfirm);
             }
         }
-
-        else if (state == STATE_SCORE)
+        else if (gameState == STATE_SCORE)
         {
             ClearBackground(RAYWHITE);
 
-            // --- Determine rating based on time survived ---
-            const char *rank;
-            double timeSurvived = 300.0 - gameTimer; // how long player lasted
+            double timeSurvived = 300.0 - gameTimer;
+            if (timeSurvived < 0)
+                timeSurvived = 0;
 
+            const char *rank;
             if (timeSurvived >= 300.0)
                 rank = "S";
             else if (timeSurvived >= 180.0)
@@ -821,11 +865,11 @@ int main(void)
             else
                 rank = "C";
 
-            char result[64];
-            sprintf(result, "Your Rating: %s", rank);
+            char rankText[64];
+            sprintf(rankText, "Your Rating: %s", rank);
             int fontSize = 100;
-            int textW = MeasureText(result, fontSize);
-            DrawText(result, (screenWidth - textW) / 2, screenHeight / 3, fontSize, BLACK);
+            int rankW = MeasureText(rankText, fontSize);
+            DrawText(rankText, (screenWidth - rankW) / 2, screenHeight / 3, fontSize, BLACK);
 
             char timeStr[64];
             int minutes = (int)(timeSurvived / 60);
@@ -834,53 +878,66 @@ int main(void)
             int timeW = MeasureText(timeStr, 40);
             DrawText(timeStr, (screenWidth - timeW) / 2, screenHeight / 2, 40, DARKGRAY);
 
-            // Back to menu button
             const char *menuText = "BACK TO MENU";
             int menuSize = 40;
             int menuW = MeasureText(menuText, menuSize);
-            Rectangle menuBtn = {(float)(screenWidth - menuW) / 2 - 20, (float)(screenHeight / 2) + 120, (float)menuW + 40, 70};
+            Rectangle menuBtn = {
+                (float)(screenWidth - menuW) / 2 - 20,
+                (float)(screenHeight / 2) + 120,
+                (float)menuW + 40,
+                70};
 
-            Vector2 m = GetMousePosition();
-            bool hoverMenu = CheckCollisionPointRec(m, menuBtn);
+            Vector2 mouse = GetMousePosition();
+            bool hover = CheckCollisionPointRec(mouse, menuBtn);
 
-            DrawRectangleRec(menuBtn, hoverMenu ? LIGHTGRAY : GRAY);
+            DrawRectangleRec(menuBtn, hover ? LIGHTGRAY : GRAY);
             DrawText(menuText, menuBtn.x + 20, menuBtn.y + 15, menuSize, BLACK);
 
-            if (hoverMenu && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+            if (hover && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
-                // reset everything and go back
-                state = STATE_MENU;
+                gameState = STATE_MENU;
                 playerConfirmed = false;
                 gameStarted = false;
                 countdownActive = false;
                 playerInitialized = false;
-                currentBullets = maxBullets;
-                reloading = false;
+                gCurrentBullets = gMaxBullets;
+                gIsReloading = false;
                 timerActive = false;
-                playerHealth = PLAYER_MAX_HEALTH;
-                playerInvulnerable = false;
-                playerInvulnTimer = 0.0f;
+                gPlayerHealth = PLAYER_MAX_HEALTH;
+                gPlayerInvulnerable = false;
+                gInvulnTimer = 0.0f;
                 gameTimer = 300.0;
-                PlaySound(Confirm);
-                PlaySound(Game_Music);
+                ResetEntities(bullets, gEnemies);
+
+                PlaySound(sConfirm);
+                PlaySound(sIntroMusic);
             }
         }
 
         EndDrawing();
     }
-    UnloadSound(Select);
-    UnloadSound(Confirm);
-    UnloadSound(Countdown);
-    UnloadSound(Reload);
-    UnloadSound(Shooting);
-    UnloadSound(Lose);
-    UnloadSound(Ingame);
-    UnloadSound(Game_Music);
-    UnloadSound(Damaged);
-    UnloadSound(Enemies_Death);
-    CloseAudioDevice();
-    UnloadTexture(Background);
 
+    // Cleanup
+    UnloadSound(sSelect);
+    UnloadSound(sConfirm);
+    UnloadSound(sCountdown);
+    UnloadSound(sReload);
+    UnloadSound(sShoot);
+    UnloadSound(sLose);
+    UnloadSound(sIngame);
+    UnloadSound(sIntroMusic);
+    UnloadSound(sDamaged);
+    UnloadSound(sEnemyDeath);
+
+    UnloadTexture(backgroundTexture);
+    UnloadTexture(enemyTexture);
+    for (int i = 0; i < 3; i++)
+    {
+        UnloadTexture(playerPortraits[i]);
+        UnloadTexture(playerTopDown[i]);
+    }
+
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }
