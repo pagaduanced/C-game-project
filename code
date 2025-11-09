@@ -305,12 +305,12 @@ int main(void)
         // === update game timer if active ===
          if (timerActive)
         {
-            gameTimer -= dt; // subtract real time in seconds
+            gameTimer -= dt; // substract 1 second per second
             if (gameTimer <= 0.0)
             {
                 gameTimer = 0.0;
                 timerActive = false;
-                state = STATE_GAMEOVER; // switch to game over
+                state = STATE_GAMEOVER; // back to gameover when the timer runs out
                 playerConfirmed = false;
                 gameStarted = false;
                 countdownActive = false;
