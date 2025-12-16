@@ -1,0 +1,17 @@
+
+
+				LIST OF STUDENTS
+	Student Name		Score		Grade		Remarks
+	Amiel			88		B		Passed
+	Arlan			70		D		Failed
+	Cedric			91		A		Passed
+	Charles			74		D		Failed
+	Eizen			83		B		Passed
+	Ewald			82		B		Passed
+	Ian			86		B		Passed
+	Justin			83		B		Passed
+	Timothy			79		C		Passed
+
+Highest: 91
+Lowest: 70
+Average: 81.78
