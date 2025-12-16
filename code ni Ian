@@ -10,115 +10,171 @@ struct Student {
 
 int main() {
     struct Student s[MAX], tempstudent;
-    int numOfStudents, i, j;
-    int highest, lowest, sum = 0;
+    int numOfStudents = 0, addStudents, i, j;
+    int highest, lowest, sum;
     float average;
     float grade;
     char status[10];
+    int choice;
 
-    // Number of students
-    printf("Enter number of students: ");
-    scanf("%d", &numOfStudents);
+    // READ INPUT FILE
+    FILE *inputFile = fopen("C:\\Users\\henry\\OneDrive\\Desktop\\FINALS 2\\students.txt", "r");
 
-    if (numOfStudents <= 0 || numOfStudents > MAX) {
-        printf("BSIT-1C ONLY HAS 50 STUDENTS!\n");
-        return 1;
-    }
-
-    // Input names and scores
-    for (i = 0; i < numOfStudents; i++) {
-        printf("\nStudent %d name: ", i + 1);
-        scanf("%s", s[i].name);
-        printf("Student %d score: ", i + 1);
-        scanf("%d", &s[i].score);
-    }
-
-    // Sort alphabetically by name
-    for (i = 0; i < numOfStudents - 1; i++) {
-        for (j = i + 1; j < numOfStudents; j++) {
-            if (strcmp(s[i].name, s[j].name) > 0) {
-                tempstudent = s[i];
-                s[i] = s[j];
-                s[j] = tempstudent;
-            }
+    if (inputFile != NULL) {
+        printf("Existing file opened successfully!\n");
+        while (fscanf(inputFile, "%s %d", s[numOfStudents].name, &s[numOfStudents].score) != EOF) {
+            numOfStudents++;
         }
+        fclose(inputFile);
+    } else {
+        printf("No existing file found.\n");
     }
 
-    // Computation
-    highest = lowest = s[0].score;
-    for (i = 0; i < numOfStudents; i++) {
-        if (s[i].score > highest) highest = s[i].score;
-        if (s[i].score < lowest) lowest = s[i].score;
-        sum += s[i].score;
-    }
-    average = (float)sum / numOfStudents;
+    // MENU
+    do {
+        printf("\n--- MENU ---\n");
+        printf("1. Add Students\n");
+        printf("2. Delete Student\n");
+        printf("3. Display Current Students\n");
+        printf("4. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
 
-    // CMD OUTPUT
-    printf("\nNames, Grade, Status:\n");
-    for (i = 0; i < numOfStudents; i++) {
+        switch (choice) {
+            case 1:  // ADD STUDENTS
+                printf("\nHow many students do you want to add? ");
+                scanf("%d", &addStudents);
+                if (numOfStudents + addStudents > MAX) {
+                    printf("BSIT-1C ONLY HAS 50 STUDENTS!\n");
+                    break;
+                }
+                for (i = numOfStudents; i < numOfStudents + addStudents; i++) {
+                    printf("\nStudent %d name: ", i + 1);
+                    scanf("%s", s[i].name);
+                    printf("Student %d score: ", i + 1);
+                    scanf("%d", &s[i].score);
+                }
+                numOfStudents += addStudents;
+                printf("\nAdded!\n");  // confirmation message
+                break;
 
-    // GRADE
-    if (s[i].score >= 99) grade = 1.00;
-        else if (s[i].score >= 96) grade = 1.25;
-        else if (s[i].score >= 93) grade = 1.50;
-        else if (s[i].score >= 90) grade = 1.75;
-        else if (s[i].score >= 87) grade = 2.00;
-        else if (s[i].score >= 84) grade = 2.25;
-        else if (s[i].score >= 81) grade = 2.50;
-        else if (s[i].score >= 78) grade = 2.75;
-        else if (s[i].score >= 75) grade = 3.00;
-    else grade = 5.00;
+            case 2:  // DELETE STUDENT
+                if (numOfStudents == 0) {
+                    printf("No students to delete.\n");
+                    break;
+                }
+                char delName[20];
+                printf("Enter the name of the student to delete: ");
+                scanf("%s", delName);
+                int found = 0;
+                for (i = 0; i < numOfStudents; i++) {
+                    if (strcmp(s[i].name, delName) == 0) {
+                        found = 1;
+                        for (j = i; j < numOfStudents - 1; j++) {
+                            s[j] = s[j + 1];
+                        }
+                        numOfStudents--;
+                        printf("%s has been deleted.\n", delName);
+                        break;
+                    }
+                }
+                if (!found) printf("Student not found.\n");
+                break;
 
-    // GRADE STATUS
-    if (grade == 5.00)
-        strcpy(status, "Failed");
-    else
-        strcpy(status, "Passed");
+            case 3:  // DISPLAY CURRENT STUDENTS
+                if (numOfStudents == 0) {
+                    printf("No students available.\n");
+                    break;
+                }
 
-    // OUTPUT
-    printf("\t%s\t%d\t%.2f\t%s\n",
-        s[i].name, s[i].score, grade, status);
-    }
+                // SORTING ALPHABETICALLY
+                for (i = 0; i < numOfStudents - 1; i++) {
+                    for (j = i + 1; j < numOfStudents; j++) {
+                        if (strcmp(s[i].name, s[j].name) > 0) {
+                            tempstudent = s[i];
+                            s[i] = s[j];
+                            s[j] = tempstudent;
+                        }
+                    }
+                }
 
-    printf("\nHighest Score:\t%d\n", highest);
-    printf("Lowest Score:\t%d\n", lowest);
-    printf("Average Score: %.1f\n", average);
+                // Compute highest, lowest, average
+                highest = lowest = s[0].score;
+                sum = 0;
+                for (i = 0; i < numOfStudents; i++) {
+                    if (s[i].score > highest) highest = s[i].score;
+                    if (s[i].score < lowest) lowest = s[i].score;
+                    sum += s[i].score;
+                }
+                average = (float)sum / numOfStudents;
 
-    // TEXT FILE
-    FILE *pFile = fopen("C:\\Users\\henry\\OneDrive\\Desktop\\FINALS COMPPROG\\FINALS.txt", "w");
-    if (pFile == NULL) {
-        printf("File not found!\n");
-        return 1;
-    }
+                // Display TUP Grading System
+                printf("\nNames\tScore\tGrade\tStatus\n");
+                for (i = 0; i < numOfStudents; i++) {
+                    if (s[i].score >= 99) grade = 1.00;
+                    else if (s[i].score >= 96) grade = 1.25;
+                    else if (s[i].score >= 93) grade = 1.50;
+                    else if (s[i].score >= 90) grade = 1.75;
+                    else if (s[i].score >= 87) grade = 2.00;
+                    else if (s[i].score >= 84) grade = 2.25;
+                    else if (s[i].score >= 81) grade = 2.50;
+                    else if (s[i].score >= 78) grade = 2.75;
+                    else if (s[i].score >= 75) grade = 3.00;
+                    else grade = 5.00;
 
-    fprintf(pFile, "Names,Grade, Status:\n");
-    for (i = 0; i < numOfStudents; i++) {
-        if (s[i].score >= 99) grade = 1.00;
-        else if (s[i].score >= 96) grade = 1.25;
-        else if (s[i].score >= 93) grade = 1.50;
-        else if (s[i].score >= 90) grade = 1.75;
-        else if (s[i].score >= 87) grade = 2.00;
-        else if (s[i].score >= 84) grade = 2.25;
-        else if (s[i].score >= 81) grade = 2.50;
-        else if (s[i].score >= 78) grade = 2.75;
-        else if (s[i].score >= 75) grade = 3.00;
-        else grade = 5.00;
+                    if (grade == 5.00) strcpy(status, "Failed");
+                    else strcpy(status, "Passed");
 
-        if (grade == 5.00)
-            strcpy(status, "Failed");
-        else
-            strcpy(status, "Passed");
+                    printf("%s\t%d\t%.2f\t%s\n",
+                           s[i].name, s[i].score, grade, status);
+                }
+                printf("\nHighest Score:\t%d\n", highest);
+                printf("Lowest Score:\t%d\n", lowest);
+                printf("Average Score: %.1f\n", average);
+                break;
 
-        fprintf(pFile, "\t%s\t%d\t%.2f\t%s\n",
-                s[i].name, s[i].score, grade, status);
-    }
+            case 4:
+                printf("Exiting program...\n");
+                break;
 
-    fprintf(pFile, "\nHighest Score:\t%d\n", highest);
-    fprintf(pFile, "Lowest Score:\t%d\n", lowest);
-    fprintf(pFile, "Average Score: %.1f\n", average);
+            default:
+                printf("Invalid choice. Try again.\n");
+        }
 
-    fclose(pFile);
+        } while (choice != 4);
 
-    printf("\nSaved SUCCESSFULLY!");
+    // SAVING TO OUTPUT FILE
+        FILE *pFile = fopen("C:\\Users\\henry\\OneDrive\\Desktop\\FINALS 2\\quiz_summary.txt", "w");
+
+        fprintf(pFile, "Names, Score, Grade, Status:\n");
+
+        for (i = 0; i < numOfStudents; i++) {
+            if (s[i].score >= 99) grade = 1.00;
+                else if (s[i].score >= 96) grade = 1.25;
+                else if (s[i].score >= 93) grade = 1.50;
+                else if (s[i].score >= 90) grade = 1.75;
+                else if (s[i].score >= 87) grade = 2.00;
+                else if (s[i].score >= 84) grade = 2.25;
+                else if (s[i].score >= 81) grade = 2.50;
+                else if (s[i].score >= 78) grade = 2.75;
+                else if (s[i].score >= 75) grade = 3.00;
+            else grade = 5.00;
+
+            if (grade == 5.00)
+                strcpy(status, "Failed");
+            else
+                strcpy(status, "Passed");
+
+            fprintf(pFile, "\t%s\t%d\t%.2f\t%s\n",
+                    s[i].name, s[i].score, grade, status);
+}
+            fprintf(pFile, "\nHighest Score:\t%d\n", highest);
+            fprintf(pFile, "Lowest Score:\t%d\n", lowest);
+            fprintf(pFile, "Average Score: %.1f\n", average);
+
+            fclose(pFile);
+
+        printf("\nSaved SUCCESSFULLY!\n");
+
     return 0;
 }
